@@ -1,25 +1,20 @@
 CFLAGS:=-c -Wall -Weffc++ -g -std=c++11 -Iinclude
 LDFLAGS:=-lboost_system -lpthread
-# TODO change the makefile for StompEMIlient
-all: EchoClient
 
-EchoClient: bin/ConnectionHandler.o bin/echoClient.o
-	g++ -o bin/EchoClient bin/ConnectionHandler.o bin/echoClient.o $(LDFLAGS)
+all: StompEMIClient
 
-StompWCIClient: bin/ConnectionHandler.o bin/StompClient.obin/event.o
-	g++ -o bin/StompWCIClient bin/ConnectionHandler.o bin/StompClient.o $(LDFLAGS)
+# Creating directory for binaries if it doesn't exist
+$(shell mkdir -p bin)
 
-bin/ConnectionHandler.o: src/ConnectionHandler.cpp
-	g++ $(CFLAGS) -o bin/ConnectionHandler.o src/ConnectionHandler.cpp
+# Collecting all source files
+SRC_FILES := $(wildcard src/*.cpp)
+OBJ_FILES := $(patsubst src/%.cpp,bin/%.o,$(SRC_FILES))
 
-bin/echoClient.o: src/echoClient.cpp
-	g++ $(CFLAGS) -o bin/echoClient.o src/echoClient.cpp
+StompEMIClient: $(OBJ_FILES)
+	g++ -o bin/StompEMIClient $(OBJ_FILES) $(LDFLAGS)
 
-bin/event.o: src/event.cpp
-	g++ $(CFLAGS) -o bin/event.o src/event.cpp
-
-bin/StompClient.o: src/StompClient.cpp
-	g++ $(CFLAGS) -o bin/StompClient.o src/StompClient.cpp
+bin/%.o: src/%.cpp
+	g++ $(CFLAGS) -o $@ $<
 
 .PHONY: clean
 clean:
