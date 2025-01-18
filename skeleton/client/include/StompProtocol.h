@@ -1,62 +1,67 @@
 #pragma once
+
 #include "../include/ConnectionHandler.h"
 #include "../include/event.h"
-#include <string>
-#include <thread>
-#include <mutex>
-#include <atomic>
 #include <map>
 #include <vector>
+#include <string>
+#include <mutex>
+#include <atomic>
+#include <memory>
+
 
 class StompProtocol {
 private:
-    ConnectionHandler* connectionHandler;
-    std::atomic<bool> connected{false};
+    // Connection management
+    std::unique_ptr<ConnectionHandler> connectionHandler;
+    std::mutex stateMutex;
     std::atomic<bool> shouldTerminate{false};
-    std::mutex mutex;
-    std::string currentUser;
-    std::map<std::string, int> subscriptionIds; // topic -> subscription id
-    std::map<std::string, std::vector<Event>> userEvents; // user -> events
-    int nextSubscriptionId;
-    int nextReceiptId;
-
-    // Helper functions
-    std::string generateFrame(const std::string& command, 
-                            const std::map<std::string, std::string>& headers,
-                            const std::string& body = "");
-    int getNextSubscriptionId();
-    int getNextReceiptId();
-    bool sendFrame(const std::string& frame);
-    void saveEvent(const Event& event, const std::string& username);
-    std::string convertTimeToString(int timestamp);
-    bool processLoginResponse(const std::string& username);
-    bool validateLoginInput(const std::string& host_port, const std::string& username, const std::string& password);
-    bool handleLogin(const std::string& host_port, const std::string& username, const std::string& password);
-
-
+    
+    // STOMP Protocol state
+    std::atomic<bool> isLoggedIn{false};
+    int nextReceiptId{0};
+    int nextSubscriptionId{0};
+    std::string currentUsername;
+    
+    // Thread-safe data structures
+    std::mutex dataMutex;
+    std::map<std::string, int> channelToSubId;    // channel -> subId
+    std::map<int, std::string> subIdToChannel;    // subId -> channel
+    std::map<std::string, std::string> receiptIdToMsg;  // receiptId -> pending message
+    std::map<std::string, std::vector<Event>> userChannelEvents; // channel_user -> events
+    
+    // Frame creation methods
+    std::string createConnectFrame(const std::string& username, const std::string& password);
+    std::string createSubscribeFrame(const std::string& channel);
+    std::string createUnsubscribeFrame(int subscriptionId);
+    std::string createSendFrame(const std::string& destination, const std::string& body);
+    std::string createDisconnectFrame();
+    
+    // Helper methods
+    std::vector<std::string> split(const std::string& s, char delimiter) const;
+    std::string getHeader(const std::string& header, const std::vector<std::string>& lines) const;
+    void saveEventForUser(const std::string& channel, const std::string& user, const Event& event);
+    std::string formatDateTime(int epochTime) const;
+    std::string formatEventMessage(const Event& event) const;
 
 
 public:
     StompProtocol();
-    ~StompProtocol();
-
-    StompProtocol(const StompProtocol&) = delete;
-    StompProtocol& operator=(const StompProtocol&) = delete;
-
-    // Thread-safe command processing
-    bool processKeyboardCommand(const std::string& command);
-    bool processServerMessage(const std::string& message);
-
-    // Command handlers - thread safe using mutex
-    bool handleLogin(std::string host, short port, std::string username, std::string password);
-    bool handleJoin(std::string topic);
-    bool handleExit(std::string topic);
-    bool handleReport(std::string jsonPath);
-    bool handleSummary(std::string channel, std::string user, std::string file);
-    bool handleLogout();
-
-    // Getters
-    bool isConnected() const { return connected; }
+    ~StompProtocol() = default;
+    
+    // Connection management
+    bool connect(const std::string& host, short port, 
+                const std::string& username, const std::string& password);
+    void disconnect();
+    bool isConnected() const { return isLoggedIn; }
     bool shouldStop() const { return shouldTerminate; }
-    ConnectionHandler* getConnectionHandler() { return connectionHandler; }
+    
+    // Main protocol operations
+    std::vector<std::string> processInput(const std::string& input);
+    void processResponse(const std::string& response);
+    bool send(const std::string& frame);
+    bool receiveFrame(std::string& frame);
+    
+    // Event handling
+    void writeEventSummary(const std::string& channel, const std::string& user, const std::string& filename);
 };

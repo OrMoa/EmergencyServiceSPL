@@ -22,8 +22,10 @@ bool ConnectionHandler::connect() {
 		tcp::endpoint endpoint(boost::asio::ip::address::from_string(host_), port_); // the server endpoint
 		boost::system::error_code error;
 		socket_.connect(endpoint, error);
-		if (error)
+		if (error){
+			std::cerr << "[DEBUG] Connection failed: " << error.message() << std::endl;
 			throw boost::system::system_error(error);
+		}
 	}
 	catch (std::exception &e) {
 		std::cerr << "Connection failed (Error: " << e.what() << ')' << std::endl;
@@ -94,7 +96,8 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
 
 bool ConnectionHandler::sendFrameAscii(const std::string &frame, char delimiter) {
 	bool result = sendBytes(frame.c_str(), frame.length());
-	if (!result) return false;
+	if (!result) 
+		return false;
 	return sendBytes(&delimiter, 1);
 }
 

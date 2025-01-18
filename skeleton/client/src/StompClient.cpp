@@ -2,53 +2,22 @@
 #include <thread>
 #include <iostream>
 #include <sstream>
-
-void readFromKeyboard(StompProtocol& protocol) {
-    const short bufsize = 1024;
-    char buf[bufsize];
-    while (!protocol.shouldStop()) {
-        std::cin.getline(buf, bufsize);
-        std::string line(buf);
-        
-        if (!protocol.processKeyboardCommand(line)) {
-            std::cout << "Error processing command" << std::endl;
-            if (line == "logout") {
-                break;
-            }
-        }
-    }
-}
-
-void readFromSocket(StompProtocol& protocol) {
-    while (!protocol.shouldStop()) {
-        if (!protocol.isConnected() || protocol.getConnectionHandler() == nullptr) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
-        }
-
-        std::string answer;
-        if (!protocol.getConnectionHandler()->getLine(answer)) {
-            std::cout << "Connection closed" << std::endl;
-            break;
-        }
-
-        if (!protocol.processServerMessage(answer)) {
-            break;
-        }
-    }
-}
+#include "../include/keyboardInput.h"
+#include "../include/SocketReader.h"
 
 int main(int argc, char *argv[]) {
-    // Create the protocol instance
+    std::cout << "Starting client..." << std::endl;
     StompProtocol protocol;
+    std::cout << "Initialized protocol successfully." << std::endl;
     
-    // Create threads for keyboard and socket reading
-    std::thread keyboardThread(readFromKeyboard, std::ref(protocol));
-    std::thread socketThread(readFromSocket, std::ref(protocol));
+    KeyboardInput keyboardInput(protocol);
+    SocketReader socketReader(protocol);
     
-    // Wait for both threads to finish
-    keyboardThread.join();
-    socketThread.join();
+    keyboardInput.start();
+    socketReader.start();
     
+    keyboardInput.stop();
+    socketReader.stop();
+        
     return 0;
 }

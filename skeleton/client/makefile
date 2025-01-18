@@ -1,22 +1,22 @@
-CFLAGS:=-c -Wall -Weffc++ -g -std=c++11 -Iinclude
-LDFLAGS:=-lboost_system -lpthread
+CFLAGS := -c -Wall -Weffc++ -g -std=c++17 -Iinclude
+LDFLAGS := -lboost_system -lpthread
+
+# Source files excluding echoClient.cpp
+SRC_FILES := $(filter-out src/echoClient.cpp, $(wildcard src/*.cpp))
+OBJ_FILES := $(patsubst src/%.cpp,bin/%.o,$(SRC_FILES))
 
 all: StompEMIClient
 
-# Creating directory for binaries if it doesn't exist
 $(shell mkdir -p bin)
 
-# Collecting all source files
-SRC_FILES := $(wildcard src/*.cpp)
-OBJ_FILES := $(patsubst src/%.cpp,bin/%.o,$(SRC_FILES))
-
 StompEMIClient: $(OBJ_FILES)
+	@echo "Linking object files..."
 	g++ -o bin/StompEMIClient $(OBJ_FILES) $(LDFLAGS)
 
 bin/%.o: src/%.cpp
+	@echo "Compiling $<..."
 	g++ $(CFLAGS) -o $@ $<
 
 .PHONY: clean
 clean:
 	rm -f bin/*
-	
