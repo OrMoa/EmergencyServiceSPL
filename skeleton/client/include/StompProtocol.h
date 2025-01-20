@@ -13,7 +13,7 @@
 class StompProtocol {
 private:
     // Connection management
-    std::unique_ptr<ConnectionHandler> connectionHandler;
+    std::shared_ptr<ConnectionHandler> connectionHandler;
     std::mutex stateMutex;
     std::atomic<bool> shouldTerminate{false};
     
@@ -53,7 +53,7 @@ public:
     bool connect(const std::string& host, short port, 
                 const std::string& username, const std::string& password);
     void disconnect();
-    bool isConnected() const { return isLoggedIn; }
+    bool isConnected() const;
     bool shouldStop() const { return shouldTerminate; }
     
     // Main protocol operations

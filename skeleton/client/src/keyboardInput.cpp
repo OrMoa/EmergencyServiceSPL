@@ -3,7 +3,10 @@
 #include <sstream>
 
 KeyboardInput::KeyboardInput(StompProtocol& protocol)
-    : protocol(protocol), inputThread(), shouldStop(false) {}
+    : protocol(protocol), inputThread(), shouldStop(false) {
+        std::cout << "[DEBUG] KeyboardInput initialized." << std::endl;
+
+    }
 
 bool KeyboardInput::parseHostPort(const std::string& hostPort, std::string& host, short& port) {
     size_t colonPos = hostPort.find(':');
@@ -19,20 +22,29 @@ bool KeyboardInput::parseHostPort(const std::string& hostPort, std::string& host
 }
 
 void KeyboardInput::run() {
+    std::cout << "[DEBUG] KeyboardInput::run started." << std::endl;
+
     while(!shouldStop && !protocol.shouldStop()) {
+
+        /*std::cout << "[DEBUG] Checking input. shouldStop: " << shouldStop 
+                  << ", protocol.shouldStop: " << protocol.shouldStop() 
+                  << ", protocol.isConnected: " << protocol.isConnected() << std::endl;*/
+
         const short bufsize = 1024;
         char buf[bufsize];
         std::cin.getline(buf, bufsize);
-        
-        if(shouldStop || protocol.shouldStop()) break;
-        
+        if(shouldStop || protocol.shouldStop()){
+            std::cout << "[DEBUG] Stopping KeyboardInput::run." << std::endl;
+            break;
+        }
         std::string line(buf);
         std::istringstream iss(line);
         std::string command;
         iss >> command;
-        if (line.empty()) 
+        if (line.empty()) {
+            std::cout << "[DEBUG] Empty line, skipping." << std::endl;
             continue;
-
+        }
         if(command == "login") {
             if(!protocol.isConnected()) {
                 std::string hostPort, username, password;
@@ -58,15 +70,22 @@ void KeyboardInput::run() {
         }
         else {
             // Process other commands when connected
+            std::cout << "[DEBUG] else in keyBoardInput: " << line << std::endl;
             std::vector<std::string> frames = protocol.processInput(line);
+
+            std::cout << "[DEBUG] Got " << frames.size() << " frames to send" << std::endl;
+
             for(const std::string& frame : frames) {
                 if(!frame.empty()) {
+                    std::cout << "[DEBUG] Sending frame:\n" << frame << std::endl;
                     if(!protocol.send(frame)) {
                         std::cout << "Error sending frame" << std::endl;
                         protocol.disconnect();
                         shouldStop = true;
+                        std::cout << "[DEBUG] shouldStop set to true in keyboardInput." << std::endl;
                         break;
                     }
+                    std::cout << "[DEBUG] Frame sent successfully" << std::endl;
                 }
             }
         }
@@ -78,8 +97,14 @@ void KeyboardInput::start() {
 }
 
 void KeyboardInput::stop() {
+    // Set the stop flag
     shouldStop = true;
-    if(inputThread.joinable()) {
+    std::cout << "[DEBUG] shouldStop set to true in stop (keyboardInput)." << std::endl;
+    // Force cin to unblock by closing stdin
+    pthread_kill(inputThread.native_handle(), SIGINT);
+    
+    // Wait for the thread to finish
+    if (inputThread.joinable()) {
         inputThread.join();
     }
 }

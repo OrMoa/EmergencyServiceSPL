@@ -37,19 +37,23 @@ bool StompProtocol::connect(const std::string& host, short port,
         return false;
     }
     
-connectionHandler = std::unique_ptr<ConnectionHandler>(new ConnectionHandler(host, port));
+    connectionHandler = std::unique_ptr<ConnectionHandler>(new ConnectionHandler(host, port));
     if(!connectionHandler->connect()) {
         cout << "Could not connect to server" << endl;
+        connectionHandler.reset();       
         return false;
     }
     
     string frame = createConnectFrame(username, password);
     if(!connectionHandler->sendFrameAscii(frame, '\0')) {
         cout << "Failed to send CONNECT frame" << endl;
+        connectionHandler.reset();
         return false;
     }
     
     currentUsername = username;
+    isLoggedIn = true;
+    cout << "[DEBUG] CONNECT frame sent successfully. Waiting for server response..." << endl;
     return true;
 }
 
@@ -70,6 +74,8 @@ vector<string> StompProtocol::processInput(const string& input) {
     if(parts.empty()) return frames;
     
     const string& command = parts[0];
+
+    std::cout << "[DEBUG] Processing command: " << command << std::endl;
     
     if(command == "join" && parts.size() >= 2) {
         std::lock_guard<std::mutex> lock(dataMutex);
@@ -97,6 +103,7 @@ vector<string> StompProtocol::processInput(const string& input) {
     }
     else if(command == "report" && parts.size() >= 2) {
         try {
+            std::cout << "[DEBUG] Processing report file: " << parts[1] << std::endl;
             names_and_events eventsData = parseEventsFile(parts[1]);
             for(const Event& event : eventsData.events) {
                 frames.push_back(createSendFrame(event.get_channel_name(), 
@@ -112,15 +119,20 @@ vector<string> StompProtocol::processInput(const string& input) {
         writeEventSummary(parts[1], parts[2], parts[3]);
     }
     else if(command == "logout") {
-        frames.push_back(createDisconnectFrame());
+        std::cout << "[DEBUG] Creating DISCONNECT frame" << std::endl;
+        string frame = createDisconnectFrame();
+        frames.push_back(frame);
+        std::cout << "[DEBUG] Added DISCONNECT frame to frames vector" << std::endl;
     }
-    
+    std::cout << "[DEBUG] Number of frames to send: " << frames.size() << std::endl;
     return frames;
 }
 
 void StompProtocol::processResponse(const string& response) {
     vector<string> lines = split(response, '\n');
     if(lines.empty()) return;
+
+    std::cout << "[DEBUG] Processing response. Command: " << lines[0] << std::endl;
     
     if(lines[0] == "CONNECTED") {
         std::lock_guard<std::mutex> lock(stateMutex);
@@ -133,6 +145,9 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "RECEIPT") {
         string receiptId = getHeader("receipt-id", lines);
+
+        std::cout << "[DEBUG] Got RECEIPT with id: " << receiptId << std::endl;
+
         string msg;
         {
             std::lock_guard<std::mutex> lock(dataMutex);
@@ -182,14 +197,37 @@ string StompProtocol::createConnectFrame(const string& username, const string& p
     return frame.str();
 }
 
-string StompProtocol::createSubscribeFrame(const string& channel) {
+/*string StompProtocol::createSubscribeFrame(const string& channel) {
     std::stringstream frame;
+    std::string receiptId = std::to_string(nextReceiptId);
     frame << "SUBSCRIBE\n"
           << "destination:" << channel << "\n"
           << "id:" << channelToSubId[channel] << "\n"
           << "receipt:" << nextReceiptId << "\n\n";
     return frame.str();
+}*/
+
+std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
+    std::stringstream frame;
+    std::string receiptId = std::to_string(nextReceiptId);
+    
+    // Save the pending message for this receipt
+    {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        receiptIdToMsg[receiptId] = "Joined channel " + channel;
+    }
+    
+    frame << "SUBSCRIBE\n"
+          << "destination:/" << channel << "\n"  // Added leading '/' as per examples
+          << "id:" << channelToSubId[channel] << "\n"
+          << "receipt:" << receiptId << "\n\n";
+    
+    std::cout << "[DEBUG] Sending SUBSCRIBE frame for channel: " << channel 
+              << " with receipt: " << receiptId << std::endl;
+              
+    return frame.str();
 }
+
 
 string StompProtocol::createUnsubscribeFrame(int subscriptionId) {
     std::stringstream frame;
@@ -227,13 +265,32 @@ string StompProtocol::createSendFrame(const string& destination, const string& b
 
 string StompProtocol::createDisconnectFrame() {
     std::stringstream frame;
+    std::string receiptId = std::to_string(nextReceiptId);
+    
+    // Save the pending message for this receipt
+    {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        receiptIdToMsg[receiptId] = "disconnect";  // Special message to trigger disconnect
+    }
+    
     frame << "DISCONNECT\n"
-          << "receipt:" << nextReceiptId << "\n\n";
+          << "receipt:" << receiptId << "\n\n";
+          
+    std::cout << "[DEBUG] Sending DISCONNECT frame with receipt: " << receiptId << std::endl;
     return frame.str();
 }
 
 bool StompProtocol::send(const string& frame) {
-    return connectionHandler && connectionHandler->sendFrameAscii(frame, '\0');
+    std::cout << "[DEBUG] StompProtocol::send called with frame:\n" << frame << std::endl;
+    
+    if (!connectionHandler) {
+        std::cout << "[DEBUG] send failed: no connection handler" << std::endl;
+        return false;
+    }
+    
+    bool result = connectionHandler->sendFrameAscii(frame, '\0');
+    std::cout << "[DEBUG] send result: " << (result ? "success" : "failure") << std::endl;
+    return result;
 }
 
 bool StompProtocol::receiveFrame(string& frame) {
@@ -341,4 +398,8 @@ string StompProtocol::formatDateTime(int epochTime) const {
     char buffer[80];
     strftime(buffer, sizeof(buffer), "%d/%m/%y %H:%M", timeinfo);
     return string(buffer);
+}
+
+bool StompProtocol::isConnected() const {
+    return connectionHandler != nullptr && connectionHandler->isConnected();
 }
