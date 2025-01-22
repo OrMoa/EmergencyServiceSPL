@@ -4,7 +4,7 @@
       {
           "event_name": "Grand Theft Auto",
           "city": "Liberty City",
-          "date_time": "23/12/24 19:00",
+          "date_time": 1762966800,
           "description": "Pink Lampadati Felon with license plate \"STOL3N1\". White male 1.85 with black baseball hat.",
           "general_information": {
               "active": true,
@@ -14,7 +14,7 @@
       {
           "event_name": "Vandalism",
           "city": "Los Alamos",
-          "date_time": "01/01/25 03:00",
+          "date_time": 1773279900,
           "description": "Multiple cars were spray-painted in a residential neighborhood on Oak Drive. Suspect fled before police arrived.",
           "general_information": {
               "active": false,

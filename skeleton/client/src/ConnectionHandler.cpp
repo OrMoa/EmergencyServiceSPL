@@ -181,7 +181,7 @@ bool ConnectionHandler::getBytes(char bytes[], unsigned int bytesToRead) {
         std::cerr << "recv failed (Error: " << e.what() << ')' << std::endl;
         return false;
     }
-    std::cout << "[DEBUG] Successfully read " << tmp << " bytes" << std::endl;
+    //std::cout << "[DEBUG] Successfully read " << tmp << " bytes" << std::endl;
     return true;
 }
 

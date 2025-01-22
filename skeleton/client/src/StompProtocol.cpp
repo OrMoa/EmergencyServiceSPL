@@ -130,7 +130,7 @@ vector<string> StompProtocol::processInput(const string& input) {
             receiptIdToMsg[receipt] = "Joined channel " + channel;
             
             std::cout << "[DEBUG] Creating subscribe frame..." << std::endl;
-            std::string subscribeFrame = createSubscribeFrame(channel);
+            std::string subscribeFrame = createSubscribeFrame(channel+"/");
             std::cout << "[DEBUG] Created subscribe frame:\n" << subscribeFrame << std::endl;
             frames.push_back(subscribeFrame);
             std::cout << "[DEBUG] Frame added to queue" << std::endl;
@@ -160,6 +160,7 @@ vector<string> StompProtocol::processInput(const string& input) {
             subIdToChannel.erase(subId);
         }
     }
+    
     else if(command == "report") {
         if(parts.size() < 2) {
             std::cout << "Invalid report command. Usage: report {json_path}" << std::endl;
@@ -169,15 +170,24 @@ vector<string> StompProtocol::processInput(const string& input) {
         try {
             std::cout << "[DEBUG] Processing report file: " << parts[1] << std::endl;
             names_and_events eventsData = parseEventsFile(parts[1]);
+
+            std::lock_guard<std::mutex> lock(dataMutex);
+    
             for(const Event& event : eventsData.events) {
-                frames.push_back(createSendFrame(event.get_channel_name(), 
-                    formatEventMessage(event)));
+            std::string channel = event.get_channel_name();
+            std::cout << "[DEBUG] Creating send frame for channel: " << channel << std::endl;
+            saveEventForUser(channel, currentUsername, event);
+            std::string frame = createSendFrame(channel+"/", formatEventMessage(event));
+            std::cout << "[DEBUG] Created frame:\n" << frame << std::endl;
+            frames.push_back(frame);
             }
         }
-        catch(const std::exception& e) {
-            cout << "Error processing report file: " << e.what() << endl;
-        }
+    catch(const std::exception& e) {
+        cout << "Error processing report file: " << e.what() << endl;
+        cout << "Make sure the file exists and is in the correct path" << endl;
     }
+    }
+    
     else if(command == "summary") {
         if(parts.size() < 4) {
             std::cout << "Invalid summary command. Usage: summary {channel} {user} {file}" << std::endl;
@@ -214,7 +224,9 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "ERROR") {
         cout << "Error: " << lines[lines.size()-1] << endl;
+        shouldTerminate = true; // Signal threads to stop
         disconnect();
+        return;
     }
     else if(lines[0] == "RECEIPT") {
         string receiptId = getHeader("receipt-id", lines);
@@ -323,15 +335,6 @@ string StompProtocol::createConnectFrame(const string& username, const string& p
     return frame.str();
 }
 
-/*string StompProtocol::createSubscribeFrame(const string& channel) {
-    std::stringstream frame;
-    std::string receiptId = std::to_string(nextReceiptId);
-    frame << "SUBSCRIBE\n"
-          << "destination:" << channel << "\n"
-          << "id:" << channelToSubId[channel] << "\n"
-          << "receipt:" << nextReceiptId << "\n\n";
-    return frame.str();
-}*/
 
 std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
     std::stringstream frame;
@@ -340,7 +343,7 @@ std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
     receiptIdToMsg[receiptId] = "Joined channel " + channel;
 
     frame << "SUBSCRIBE\n"
-          << "destination:/" << channel << "\n"  // Added leading '/' as per examples
+          << "destination:" << channel << "\n"  // Added leading '/' as per examples
           << "id:" << channelToSubId[channel] << "\n"
           << "receipt:" << receiptId << "\n\n";
     
@@ -380,7 +383,7 @@ string StompProtocol::formatEventMessage(const Event& event) const {
 string StompProtocol::createSendFrame(const string& destination, const string& body) {
     std::stringstream frame;
     frame << "SEND\n"
-          << "destination:" << destination << "\n\n"
+          << "destination:" << destination << "\n"
           << body;
     return frame.str();
 }
@@ -460,12 +463,22 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
         }
     }
     
-    std::ofstream file(filename);
+    // Sort events first by time, then by name
+    std::sort(events.begin(), events.end(), 
+        [](const Event& a, const Event& b) {
+            if(a.get_date_time() != b.get_date_time())
+                return a.get_date_time() < b.get_date_time();
+            return a.get_name() < b.get_name();
+        });
+    
+    std::ofstream file(filename, std::ios::trunc);
     if(!file.is_open()) {
         cout << "Error: Could not open file for writing: " << filename << endl;
         return;
     }
-    
+
+    file << "Channel " << channel << endl;
+
     // Count statistics
     int totalEvents = events.size();
     int activeEvents = 0;
@@ -480,19 +493,11 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     }
     
     // Write header and stats
-    file << "Channel " << channel << endl;
     file << "Stats:" << endl;
     file << "Total: " << totalEvents << endl;
     file << "active: " << activeEvents << endl;
     file << "forces arrival at scene: " << forcesArrived << endl << endl;
     
-    // Sort events by time and name
-    std::sort(events.begin(), events.end(), 
-        [](const Event& a, const Event& b) {
-            if(a.get_date_time() != b.get_date_time())
-                return a.get_date_time() < b.get_date_time();
-            return a.get_name() < b.get_name();
-        });
     
     // Write event reports
     file << "Event Reports:" << endl;
@@ -517,9 +522,9 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
 string StompProtocol::formatDateTime(int epochTime) const {
     time_t time = static_cast<time_t>(epochTime);
     struct tm* timeinfo = localtime(&time);
-    char buffer[80];
-    strftime(buffer, sizeof(buffer), "%d/%m/%y %H:%M", timeinfo);
-    return string(buffer);
+    char dateStr[80];
+    strftime(dateStr, sizeof(dateStr), "%d/%m/%y %H:%M", timeinfo);
+    return string(dateStr);
 }
 
 bool StompProtocol::isConnected() const {

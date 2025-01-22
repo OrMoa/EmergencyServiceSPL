@@ -57,6 +57,18 @@ void SocketReader::run() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
+        /*std::string response;
+        if (!protocol.receiveFrame(response)) {
+            if (protocol.shouldStop()) {
+                break;
+            }
+            shouldStop = true;
+            break;
+        }
+
+        if(!response.empty()) {
+            protocol.processResponse(response);
+        }*/
     }
     std::cout << "[DEBUG] SocketReader::run ended." << std::endl;
 }
