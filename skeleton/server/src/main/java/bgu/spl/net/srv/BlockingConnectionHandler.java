@@ -7,10 +7,16 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+/*This pattern corresponds to the Thread-Per-Client (TPC) pattern,
+ where each client is handled by a separate thread.*/
+
 public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler<T> {
 
+    //link between client and server, processing the messages received from the client
     private final MessagingProtocol<T> protocol;
+    //Converts between textual/binary messages and objects (encoding and decoding)
     private final MessageEncoderDecoder<T> encdec;
+
     private final Socket sock;
     private BufferedInputStream in;
     private BufferedOutputStream out;
@@ -55,6 +61,17 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void send(T msg) {
-        //IMPLEMENT IF NEEDED
+        synchronized (this) { // Synchronize to ensure thread-safe access to the connection
+            try {
+            byte[] encodedMessage = encdec.encode(msg); // Encode the message into bytes
+            out.write(encodedMessage); // Write the encoded message to the output stream
+            out.flush(); // Immediately flush the data to the client
+            } catch (IOException e) {
+            System.err.println("Failed to send message: " + e.getMessage()); // Log the error
+            e.printStackTrace();
+            connected = false; // Mark the connection as no longer active
+            }
+        }
     }
+
 }

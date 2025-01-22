@@ -48,11 +48,11 @@ bool StompProtocol::connect(const std::string& host, short port,
     if(!connectionHandler->sendFrameAscii(frame, '\0')) {
         cout << "Failed to send CONNECT frame" << endl;
         connectionHandler.reset();
+        connectionHandler.reset();
         return false;
     }
     
     currentUsername = username;
-    isLoggedIn = true;
     cout << "[DEBUG] CONNECT frame sent successfully. Waiting for server response..." << endl;
     return true;
 }
@@ -74,22 +74,81 @@ vector<string> StompProtocol::processInput(const string& input) {
     if(parts.empty()) return frames;
     
     const string& command = parts[0];
-
     std::cout << "[DEBUG] Processing command: " << command << std::endl;
+
+    if(command == "login") {
+        if(parts.size() < 4) {
+            std::cout << "Invalid login command. Usage: login {host:port} {username} {password}" << std::endl;
+            return frames;
+        }
+
+        std::string hostPort = parts[1];
+        std::string username = parts[2];
+        std::string password = parts[3];
+        
+        std::string host;
+        short port;
+        if(!parseHostPort(hostPort, host, port)) {
+            std::cout << "Invalid host:port format" << std::endl;
+            return frames;
+        }
+        
+        if(!connect(host, port, username, password)) {
+            std::cout << "Could not connect to server" << std::endl;
+            return frames;
+        }
+        return frames;
+    }
     
-    if(command == "join" && parts.size() >= 2) {
-        std::lock_guard<std::mutex> lock(dataMutex);
-        string channel = parts[1];
+    // All commands below require an active connection
+    if(!isConnected()) {
+        std::cout << "Not connected to server. Please login first." << std::endl;
+        return frames;
+    }
+
+    // Handle channel-related commands
+    if(command == "join") {
+       if(parts.size() < 2) {
+        std::cout << "Invalid join command. Usage: join {channel}" << std::endl;
+        return frames;
+    }
+
+    std::cout << "[DEBUG] About to acquire lock" << std::endl;
+    std::lock_guard<std::mutex> lock(dataMutex);
+    std::cout << "[DEBUG] Lock acquired" << std::endl;
+    
+    string channel = parts[1];
+    std::cout << "[DEBUG] Processing join command for channel: " << channel << std::endl;
+
+    try {
         if(channelToSubId.count(channel) == 0) {
+            std::cout << "[DEBUG] New subscription for channel: " << channel << std::endl;
             int subId = nextSubscriptionId++;
             channelToSubId[channel] = subId;
             subIdToChannel[subId] = channel;
             string receipt = std::to_string(nextReceiptId++);
             receiptIdToMsg[receipt] = "Joined channel " + channel;
-            frames.push_back(createSubscribeFrame(channel));
+            
+            std::cout << "[DEBUG] Creating subscribe frame..." << std::endl;
+            std::string subscribeFrame = createSubscribeFrame(channel);
+            std::cout << "[DEBUG] Created subscribe frame:\n" << subscribeFrame << std::endl;
+            frames.push_back(subscribeFrame);
+            std::cout << "[DEBUG] Frame added to queue" << std::endl;
+        } else {
+            std::cout << "[DEBUG] Already subscribed to channel: " << channel << std::endl;
         }
+    } catch (const std::exception& e) {
+        std::cout << "[DEBUG] Exception in join handler: " << e.what() << std::endl;
     }
-    else if(command == "exit" && parts.size() >= 2) {
+    std::cout << "[DEBUG] Join processing complete" << std::endl;
+}
+
+    else if(command == "exit") {
+        if(parts.size() < 2) {
+            std::cout << "Invalid exit command. Usage: exit {channel}" << std::endl;
+            return frames;
+        }
+
         std::lock_guard<std::mutex> lock(dataMutex);
         string channel = parts[1];
         if(channelToSubId.count(channel) > 0) {
@@ -101,7 +160,12 @@ vector<string> StompProtocol::processInput(const string& input) {
             subIdToChannel.erase(subId);
         }
     }
-    else if(command == "report" && parts.size() >= 2) {
+    else if(command == "report") {
+        if(parts.size() < 2) {
+            std::cout << "Invalid report command. Usage: report {json_path}" << std::endl;
+            return frames;
+        }
+
         try {
             std::cout << "[DEBUG] Processing report file: " << parts[1] << std::endl;
             names_and_events eventsData = parseEventsFile(parts[1]);
@@ -114,7 +178,12 @@ vector<string> StompProtocol::processInput(const string& input) {
             cout << "Error processing report file: " << e.what() << endl;
         }
     }
-    else if(command == "summary" && parts.size() >= 4) {
+    else if(command == "summary") {
+        if(parts.size() < 4) {
+            std::cout << "Invalid summary command. Usage: summary {channel} {user} {file}" << std::endl;
+            return frames;
+        }
+
         std::lock_guard<std::mutex> lock(dataMutex);
         writeEventSummary(parts[1], parts[2], parts[3]);
     }
@@ -124,6 +193,10 @@ vector<string> StompProtocol::processInput(const string& input) {
         frames.push_back(frame);
         std::cout << "[DEBUG] Added DISCONNECT frame to frames vector" << std::endl;
     }
+    else {
+        std::cout << "Unknown command: " << command << std::endl;
+    }
+
     std::cout << "[DEBUG] Number of frames to send: " << frames.size() << std::endl;
     return frames;
 }
@@ -186,6 +259,59 @@ void StompProtocol::processResponse(const string& response) {
     }
 }
 
+/*void StompProtocol::processKeyboardInput(const std::string& input) {
+    std::cout << "[DEBUG] processKeyboardInput: " << input << std::endl;
+    
+    vector<string> parts = split(input, ' ');
+    if(parts.empty()) return;
+
+    const string& command = parts[0];
+    if(command == "login" && parts.size() >= 4) {
+        std::string hostPort = parts[1];
+        std::string username = parts[2];
+        std::string password = parts[3];
+        
+        // Parse host and port
+        size_t colonPos = hostPort.find(':');
+        if(colonPos == std::string::npos) {
+            std::cout << "Invalid host:port format" << std::endl;
+            return;
+        }
+        
+        std::string host = hostPort.substr(0, colonPos);
+        short port;
+        try {
+            port = std::stoi(hostPort.substr(colonPos + 1));
+        } catch(...) {
+            std::cout << "Invalid port number" << std::endl;
+            return;
+        }
+        
+        // Try to connect and send CONNECT frame
+        if(connect(host, port, username, password)) {
+            std::string frame = createConnectFrame(username, password);
+            if(!send(frame)) {
+                std::cout << "Error sending CONNECT frame" << std::endl;
+                disconnect();
+            }
+        }
+        return;
+    }
+    
+    // For all other commands, process normally through processInput
+    std::vector<std::string> frames = processInput(input);
+    for(const std::string& frame : frames) {
+        if(!frame.empty()) {
+            std::cout << "[DEBUG] Sending frame:\n" << frame << std::endl;
+            if(!send(frame)) {
+                std::cout << "Error sending frame" << std::endl;
+                disconnect();
+                break;
+            }
+        }
+    }
+}*/
+
 // Helper methods implementation...
 string StompProtocol::createConnectFrame(const string& username, const string& password) {
     std::stringstream frame;
@@ -210,13 +336,9 @@ string StompProtocol::createConnectFrame(const string& username, const string& p
 std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
     std::stringstream frame;
     std::string receiptId = std::to_string(nextReceiptId);
-    
-    // Save the pending message for this receipt
-    {
-        std::lock_guard<std::mutex> lock(dataMutex);
-        receiptIdToMsg[receiptId] = "Joined channel " + channel;
-    }
-    
+
+    receiptIdToMsg[receiptId] = "Joined channel " + channel;
+
     frame << "SUBSCRIBE\n"
           << "destination:/" << channel << "\n"  // Added leading '/' as per examples
           << "id:" << channelToSubId[channel] << "\n"
@@ -402,4 +524,17 @@ string StompProtocol::formatDateTime(int epochTime) const {
 
 bool StompProtocol::isConnected() const {
     return connectionHandler != nullptr && connectionHandler->isConnected();
+}
+
+bool StompProtocol::parseHostPort(const std::string& hostPort, std::string& host, short& port) {
+    size_t colonPos = hostPort.find(':');
+    if(colonPos == std::string::npos) return false;
+    
+    try {
+        host = hostPort.substr(0, colonPos);
+        port = std::stoi(hostPort.substr(colonPos + 1));
+        return true;
+    } catch(...) {
+        return false;
+    }
 }

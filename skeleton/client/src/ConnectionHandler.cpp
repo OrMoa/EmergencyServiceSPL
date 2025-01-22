@@ -212,6 +212,7 @@ bool ConnectionHandler::sendLine(std::string &line) {
 
 bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
     std::cout << "[DEBUG] Starting to read frame" << std::endl;
+    frame.clear();
     char ch;
     // Stop when we encounter the null character.
     // Notice that the null character is not appended to the frame string.
@@ -223,7 +224,12 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
             }
             if (ch != '\0')
                 frame.append(1, ch);
-        } while (delimiter != ch);
+        } while (delimiter != ch && ch != '\0');
+        if (frame.length() > 0) {  // Only return true if we actually got something
+            std::cout << "[DEBUG] Read frame: \n" << frame << std::endl;
+            return true;
+        }
+        return false; 
     } catch (std::exception &e) {
         std::cerr << "recv failed2 (Error: " << e.what() << ')' << std::endl;
         return false;

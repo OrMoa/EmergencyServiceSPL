@@ -7,6 +7,11 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.function.Supplier;
 
+/*
+Thread-Per-Client (TPC) server manager.
+Each new client that connects to the server is handled by a dedicated thread.
+Suitable for a small number of clients.
+*/
 public abstract class BaseServer<T> implements Server<T> {
 
     private final int port;

@@ -7,7 +7,7 @@ SocketReader::SocketReader(StompProtocol& protocol)
 
 void SocketReader::run() {
     std::cout << "[DEBUG] SocketReader::run started." << std::endl;
-    while(!shouldStop && !protocol.shouldStop()) {
+    /*while(!shouldStop && !protocol.shouldStop()) {
 
         if (!protocol.isConnected()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -35,6 +35,26 @@ void SocketReader::run() {
                 std::cout << "[DEBUG] shouldStop set to true." << std::endl;
                 shouldStop = true;
                 break;
+            }
+        }
+    }*/
+
+   while (!shouldStop && !protocol.shouldStop()) {
+        if (!protocol.isConnected()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        // Try to receive a frame
+        std::string response;
+        if (protocol.receiveFrame(response)) {
+            if (!response.empty()) {
+                protocol.processResponse(response);
+            }
+        } else {
+            // If receiveFrame failed but we're still supposed to be running, wait a bit
+            if (!shouldStop && !protocol.shouldStop()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
     }
