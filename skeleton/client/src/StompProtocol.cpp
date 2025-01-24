@@ -130,7 +130,7 @@ vector<string> StompProtocol::processInput(const string& input) {
             receiptIdToMsg[receipt] = "Joined channel " + channel;
             
             std::cout << "[DEBUG] Creating subscribe frame..." << std::endl;
-            std::string subscribeFrame = createSubscribeFrame(channel+"/");
+            std::string subscribeFrame = createSubscribeFrame(channel);
             std::cout << "[DEBUG] Created subscribe frame:\n" << subscribeFrame << std::endl;
             frames.push_back(subscribeFrame);
             std::cout << "[DEBUG] Frame added to queue" << std::endl;
@@ -177,7 +177,7 @@ vector<string> StompProtocol::processInput(const string& input) {
             std::string channel = event.get_channel_name();
             std::cout << "[DEBUG] Creating send frame for channel: " << channel << std::endl;
             saveEventForUser(channel, currentUsername, event);
-            std::string frame = createSendFrame(channel+"/", formatEventMessage(event));
+            std::string frame = createSendFrame(channel, formatEventMessage(event));
             std::cout << "[DEBUG] Created frame:\n" << frame << std::endl;
             frames.push_back(frame);
             }
@@ -268,6 +268,9 @@ void StompProtocol::processResponse(const string& response) {
             std::lock_guard<std::mutex> lock(dataMutex);
             saveEventForUser(channel, event.getEventOwnerUser(), event);
         }
+        else {
+        std::cout << "[DEBUG] Message body is empty, skipping event processing." << std::endl;
+        }
     }
 }
 
@@ -339,7 +342,6 @@ string StompProtocol::createConnectFrame(const string& username, const string& p
 std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
     std::stringstream frame;
     std::string receiptId = std::to_string(nextReceiptId);
-
     receiptIdToMsg[receiptId] = "Joined channel " + channel;
 
     frame << "SUBSCRIBE\n"
@@ -383,7 +385,7 @@ string StompProtocol::formatEventMessage(const Event& event) const {
 string StompProtocol::createSendFrame(const string& destination, const string& body) {
     std::stringstream frame;
     frame << "SEND\n"
-          << "destination:" << destination << "\n"
+          << "destination:/" << destination << "\n\n"
           << body;
     return frame.str();
 }
@@ -448,21 +450,33 @@ string StompProtocol::getHeader(const string& header, const vector<string>& line
 }
 
 void StompProtocol::saveEventForUser(const string& channel, const string& user, const Event& event) {
+    std::cout << "[DEBUG] Saving event for user: " << user << " in channel: " << channel << std::endl;
+
     string key = channel + "_" + user;
+    std::cout << "[DEBUG] key saved: " << key <<  std::endl;
     userChannelEvents[key].push_back(event);
 }
 
 void StompProtocol::writeEventSummary(const string& channel, const string& user, const string& filename) {
+
+    std::cout << "[DEBUG] writeEventSummary called with channel: " << channel 
+              << ", user: " << user << ", filename: " << filename << std::endl;
+
+
     std::vector<Event> events;
     string key = channel + "_" + user;
+    std::cout << "[DEBUG] Generated key: " << key << std::endl;
     
-    {
-        std::lock_guard<std::mutex> lock(dataMutex);
-        if(userChannelEvents.count(key) > 0) {
-            events = userChannelEvents[key];
-        }
+   
+    if(userChannelEvents.count(key) > 0) {
+        events = userChannelEvents[key];
+        std::cout << "[DEBUG] Found " << events.size() << " events for key: " << key << std::endl;
+    } else {
+        std::cout << "[DEBUG] No events found for key: " << key << std::endl;
+        return;
     }
-    
+
+    std::cout << "[DEBUG] Sorting events" << std::endl;
     // Sort events first by time, then by name
     std::sort(events.begin(), events.end(), 
         [](const Event& a, const Event& b) {
@@ -473,9 +487,11 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     
     std::ofstream file(filename, std::ios::trunc);
     if(!file.is_open()) {
-        cout << "Error: Could not open file for writing: " << filename << endl;
+        std::cout << "Error: Could not open file for writing: " << filename << endl;
         return;
     }
+
+    std::cout << "[DEBUG] Opened file for writing: " << filename << std::endl;
 
     file << "Channel " << channel << endl;
 
@@ -491,6 +507,10 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
         if(info.at("forces_arrival_at_scene") == "true")
             forcesArrived++;
     }
+
+    std::cout << "[DEBUG] Statistics - Total: " << totalEvents 
+              << ", Active: " << activeEvents 
+              << ", Forces Arrived: " << forcesArrived << std::endl;
     
     // Write header and stats
     file << "Stats:" << endl;
@@ -498,7 +518,8 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     file << "active: " << activeEvents << endl;
     file << "forces arrival at scene: " << forcesArrived << endl << endl;
     
-    
+    std::cout << "[DEBUG] Writing event reports" << std::endl;
+  
     // Write event reports
     file << "Event Reports:" << endl;
     for(size_t i = 0; i < events.size(); i++) {
@@ -515,8 +536,11 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
         }
         file << "summary: " << desc << endl << endl;
     }
-    
+    std::cout << "[DEBUG] Finished writing event reports" << std::endl;
+
     file.close();
+    std::cout << "[DEBUG] File closed successfully" << std::endl;
+
 }
 
 string StompProtocol::formatDateTime(int epochTime) const {

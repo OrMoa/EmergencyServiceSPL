@@ -178,7 +178,7 @@ bool ConnectionHandler::getBytes(char bytes[], unsigned int bytesToRead) {
         if (error)
             throw boost::system::system_error(error);
     } catch (std::exception &e) {
-        std::cerr << "recv failed (Error: " << e.what() << ')' << std::endl;
+        std::cerr << "recv failed getBytes: (Error: " << e.what() << ')' << std::endl;
         return false;
     }
     //std::cout << "[DEBUG] Successfully read " << tmp << " bytes" << std::endl;
@@ -195,7 +195,7 @@ bool ConnectionHandler::sendBytes(const char bytes[], int bytesToWrite) {
         if (error)
             throw boost::system::system_error(error);
     } catch (std::exception &e) {
-        std::cerr << "recv failed (Error: " << e.what() << ')' << std::endl;
+        std::cerr << "recv failed in sendBytes: (Error: " << e.what() << ')' << std::endl;
         return false;
     }
     std::cout << "[DEBUG] Successfully sent " << tmp << " bytes" << std::endl;
@@ -231,7 +231,7 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
         }
         return false; 
     } catch (std::exception &e) {
-        std::cerr << "recv failed2 (Error: " << e.what() << ')' << std::endl;
+        std::cerr << "recv failed2 in getFrameAscii: (Error: " << e.what() << ')' << std::endl;
         return false;
     }
     std::cout << "[DEBUG] Successfully read frame:\n" << frame << std::endl;
