@@ -230,7 +230,7 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "RECEIPT") {
         string receiptId = getHeader("receipt-id", lines);
-
+        
         std::cout << "[DEBUG] Got RECEIPT with id: " << receiptId << std::endl;
 
         string msg;
@@ -251,83 +251,52 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "MESSAGE") {
         string channel = getHeader("destination", lines);
+
+        if(channel[0] == '/') {
+            channel = channel.substr(1);
+        }
+        std::cout << "[DEBUG] channel name from getHeader" << channel << std::endl;
         string messageBody;
-        bool bodyStarted = false;
+
+        bool headerEnded = false;
         
         for(const string& line : lines) {
-            if(bodyStarted) {
+            if(!headerEnded && line.empty()) {
+                headerEnded = true;
+                continue;
+            }
+            if(headerEnded) {
                 messageBody += line + "\n";
             }
-            else if(line.empty()) {
-                bodyStarted = true;
-            }
+        }
+        
+        if(messageBody.empty()) {
+            std::cout << "[DEBUG] Message body is still empty after parsing." << std::endl;
+            return;
         }
         
         if(!messageBody.empty()) {
-            Event event(messageBody);
-            std::lock_guard<std::mutex> lock(dataMutex);
-            saveEventForUser(channel, event.getEventOwnerUser(), event);
-        }
-        else {
-        std::cout << "[DEBUG] Message body is empty, skipping event processing." << std::endl;
-        }
+            std::cout << "[DEBUG] Parsed message body:\n" << messageBody << std::endl;
+            try {
+                Event event(messageBody);
+
+                std::string user = event.getEventOwnerUser();
+                if(!user.empty()) {
+                    std::lock_guard<std::mutex> lock(dataMutex);
+                    saveEventForUser(channel, user, event);
+                    std::cout << "[DEBUG] Saved event from user: " << user 
+                            << " in channel: " << channel << std::endl;
+                }
+            }
+            catch(const std::exception& e) {
+                std::cout << "[DEBUG] Error processing event: " << e.what() << std::endl;
+            }
+        } 
     }
 }
 
-/*void StompProtocol::processKeyboardInput(const std::string& input) {
-    std::cout << "[DEBUG] processKeyboardInput: " << input << std::endl;
-    
-    vector<string> parts = split(input, ' ');
-    if(parts.empty()) return;
 
-    const string& command = parts[0];
-    if(command == "login" && parts.size() >= 4) {
-        std::string hostPort = parts[1];
-        std::string username = parts[2];
-        std::string password = parts[3];
-        
-        // Parse host and port
-        size_t colonPos = hostPort.find(':');
-        if(colonPos == std::string::npos) {
-            std::cout << "Invalid host:port format" << std::endl;
-            return;
-        }
-        
-        std::string host = hostPort.substr(0, colonPos);
-        short port;
-        try {
-            port = std::stoi(hostPort.substr(colonPos + 1));
-        } catch(...) {
-            std::cout << "Invalid port number" << std::endl;
-            return;
-        }
-        
-        // Try to connect and send CONNECT frame
-        if(connect(host, port, username, password)) {
-            std::string frame = createConnectFrame(username, password);
-            if(!send(frame)) {
-                std::cout << "Error sending CONNECT frame" << std::endl;
-                disconnect();
-            }
-        }
-        return;
-    }
-    
-    // For all other commands, process normally through processInput
-    std::vector<std::string> frames = processInput(input);
-    for(const std::string& frame : frames) {
-        if(!frame.empty()) {
-            std::cout << "[DEBUG] Sending frame:\n" << frame << std::endl;
-            if(!send(frame)) {
-                std::cout << "Error sending frame" << std::endl;
-                disconnect();
-                break;
-            }
-        }
-    }
-}*/
 
-// Helper methods implementation...
 string StompProtocol::createConnectFrame(const string& username, const string& password) {
     std::stringstream frame;
     frame << "CONNECT\n"
@@ -337,7 +306,6 @@ string StompProtocol::createConnectFrame(const string& username, const string& p
           << "passcode:" << password << "\n\n";
     return frame.str();
 }
-
 
 std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
     std::stringstream frame;
@@ -354,7 +322,6 @@ std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
               
     return frame.str();
 }
-
 
 string StompProtocol::createUnsubscribeFrame(int subscriptionId) {
     std::stringstream frame;
@@ -424,15 +391,13 @@ bool StompProtocol::receiveFrame(string& frame) {
     return connectionHandler && connectionHandler->getFrameAscii(frame, '\0');
 }
 
-// Helper methods implementation
+//Helper methods
 vector<string> StompProtocol::split(const string& s, char delimiter) const {
     vector<string> tokens;
     std::stringstream ss(s);
     string token;
     while(std::getline(ss, token, delimiter)) {
-        if(!token.empty()) {
-            tokens.push_back(token);
-        }
+        tokens.push_back(token);
     }
     return tokens;
 }
@@ -556,6 +521,7 @@ bool StompProtocol::isConnected() const {
 }
 
 bool StompProtocol::parseHostPort(const std::string& hostPort, std::string& host, short& port) {
+
     size_t colonPos = hostPort.find(':');
     if(colonPos == std::string::npos) return false;
     
@@ -567,3 +533,4 @@ bool StompProtocol::parseHostPort(const std::string& hostPort, std::string& host
         return false;
     }
 }
+

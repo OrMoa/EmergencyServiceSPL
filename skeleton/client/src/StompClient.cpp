@@ -4,33 +4,41 @@
 #include <sstream>
 #include <utility>
 #include "../include/keyboardInput.h"
-#include "../include/SocketReader.h"
 
 
 int main(int argc, char *argv[]) {
-    std::cout << "Starting client..." << std::endl;
+    std::cout << "[DEBUG] Starting client..." << std::endl;
     StompProtocol protocol;
-    std::cout << "Initialized protocol successfully." << std::endl;
-
-
+    std::cout << "[DEBUG] Protocol initialized" << std::endl;
+    
     KeyboardInput keyboardInput(protocol);
-    SocketReader socketReader(protocol);
-    
-    // Start threads
-    std::cout << "Starting threads..." << std::endl;
+   
     keyboardInput.start();
-    socketReader.start();
+    std::cout << "[DEBUG] KeyboardInput thread started" << std::endl;
     
-    // Main loop - keep running until protocol indicates we should stop
     while(!protocol.shouldStop()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+            if(protocol.isConnected()) {
+                std::string response;
     
-    // Clean shutdown
-    std::cout << "Starting shutdown..." << std::endl;
-    keyboardInput.stop();
-    socketReader.stop();
+                std::cout << "[DEBUG] Attempting to receive frame..." << std::endl;
+
+                if(protocol.receiveFrame(response)) {
+                    if(!response.empty()) {
+                        std::cout << "[DEBUG] Received response:\n" << response << std::endl;
+                        protocol.processResponse(response);
+                    }
+                } else if(!protocol.shouldStop()) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+           
+        std::cout << "[DEBUG] Main loop terminated, cleaning up..." << std::endl;
+        keyboardInput.stop();
+        std::cout << "[DEBUG] KeyboardInput stopped" << std::endl;
+
     
-    std::cout << "Client terminated." << std::endl;
     return 0; 
 }

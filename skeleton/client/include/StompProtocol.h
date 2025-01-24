@@ -44,6 +44,7 @@ private:
     std::string formatDateTime(int epochTime) const;
     std::string formatEventMessage(const Event& event) const;
     bool parseHostPort(const std::string& hostPort, std::string& host, short& port);
+    std::string trim(const std::string& str);
 
 
 

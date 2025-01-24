@@ -21,6 +21,7 @@ private:
     // map of all the general information
     std::map<std::string, std::string> general_information;
     std::string eventOwnerUser;
+    std::string trim(const std::string& str) const;
 
 
 public:
