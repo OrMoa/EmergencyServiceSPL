@@ -9,24 +9,50 @@ import bgu.spl.net.impl.stomp.StompMessagingProtocolImpl;
 public class StompServer {
 
     public static void main(String[] args) {// Determine the port from the command-line arguments, default to 7777
-        int port = args.length > 1 ? Integer.parseInt(args[1]) : 7777;
+        // Default port number
+        int port = 7777;
+        // Check if port is provided
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]); // Parse the first argument as port
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid port number. Using default port 7777.");
+            }
+        }
 
-        if (args.length > 0 && args[0].equalsIgnoreCase("reactor")) { 
-            // If the first argument is "reactor", run the server in Reactor pattern
-            int numThreads = Runtime.getRuntime().availableProcessors(); // Number of available CPU cores
-            Server.<String>reactor(
-                    numThreads, // Number of threads
-                    port, // Port for the server to listen on
-                    StompMessagingProtocolImpl::new, // Factory for the protocol
-                    StompMessageEncoderDecoder::new // Factory for message encoding/decoding
-            ).serve();
-        } else { 
-            // Default to Thread-Per-Client pattern
-            Server.<String>threadPerClient(
-                    port, // Port for the server to listen on
-                    StompMessagingProtocolImpl::new, // Factory for the protocol
-                    StompMessageEncoderDecoder::new // Factory for message encoding/decoding
-            ).serve();
+        // Check if reactor/tpc is provided
+        if (args.length < 2) {
+            System.err.println("Missing server type (reactor/tpc).");
+            System.exit(1);
+        }
+
+        String serverType = args[1].toLowerCase();
+
+        switch (serverType) {
+            case "reactor":
+                // Reactor server
+                int numThreads = Runtime.getRuntime().availableProcessors();
+                Server.<String>reactor(
+                        numThreads,
+                        port,
+                        StompMessagingProtocolImpl::new,
+                        StompMessageEncoderDecoder::new
+                ).serve();
+                break;
+
+            case "tpc":
+                System.out.println("[DEBUG] i'm in Thread-Per-Client server");
+                // Thread-Per-Client server
+                Server.<String>threadPerClient(
+                        port,
+                        StompMessagingProtocolImpl::new,
+                        StompMessageEncoderDecoder::new
+                ).serve();
+                break;
+
+            default:
+                System.err.println("Invalid server type. Use 'reactor' or 'tpc'.");
+                System.exit(1);
         }
     }
 }

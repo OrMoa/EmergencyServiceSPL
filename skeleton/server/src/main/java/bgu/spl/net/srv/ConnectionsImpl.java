@@ -13,6 +13,7 @@ public class ConnectionsImpl<T> implements Connections<T> {
 
     @Override
     public boolean send(int connectionId, T msg) {
+        System.out.println("[DEBUG] Im in send (ConnectionsImpl) with connID:"+ connectionId + "msg:"+ msg);
         ConnectionHandler<T> handler = clients.get(connectionId);
         if (handler != null) {
             handler.send(msg);
@@ -37,7 +38,12 @@ public class ConnectionsImpl<T> implements Connections<T> {
     @Override
     public void disconnect(int connectionId) {
         clients.remove(connectionId);
-        System.out.println("Connection with ID " + connectionId + " has been removed.");
+        System.out.println("[DEBUG] Connection with ID " + connectionId + " has been removed.");
     }
-
+    @Override
+    public void addClient(int connectionId, ConnectionHandler<T> handler) {
+        clients.put(connectionId, handler);
+        System.out.println("[DEBUG] Client with connectionId " + connectionId + " has been added.");
+    }
+    
 }

@@ -58,15 +58,13 @@ bool StompProtocol::connect(const std::string& host, short port,
 }
 
 void StompProtocol::disconnect() {
-    std::lock_guard<std::mutex> lock(stateMutex);
-    if(isLoggedIn) {
-        string frame = createDisconnectFrame();
-        connectionHandler->sendFrameAscii(frame, '\0');
+        channelToSubId.clear();
+        subIdToChannel.clear();
+        connectionHandler->close();
+        connectionHandler = nullptr;
         isLoggedIn = false;
         shouldTerminate = true;
     }
-    connectionHandler = nullptr;
-}
 
 vector<string> StompProtocol::processInput(const string& input) {
     vector<string> frames;
@@ -281,7 +279,7 @@ void StompProtocol::processResponse(const string& response) {
                 Event event(messageBody);
 
                 std::string user = event.getEventOwnerUser();
-                if(!user.empty()) {
+                if(!user.empty() && currentUsername != user) {
                     std::lock_guard<std::mutex> lock(dataMutex);
                     saveEventForUser(channel, user, event);
                     std::cout << "[DEBUG] Saved event from user: " << user 
@@ -370,7 +368,7 @@ string StompProtocol::createDisconnectFrame() {
     frame << "DISCONNECT\n"
           << "receipt:" << receiptId << "\n\n";
           
-    std::cout << "[DEBUG] Sending DISCONNECT frame with receipt: " << receiptId << std::endl;
+    std::cout << "[DEBUG] Sending frame with receipt: " << receiptId << std::endl;
     return frame.str();
 }
 
@@ -467,9 +465,9 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     
     for(const Event& event : events) {
         const auto& info = event.get_general_information();
-        if(info.at("active") == "true") 
+        if(info.count("active") > 0 && info.at("active") == "true") 
             activeEvents++;
-        if(info.at("forces_arrival_at_scene") == "true")
+        if(info.count("forces_arrival_at_scene") > 0 && info.at("forces_arrival_at_scene") == "true")
             forcesArrived++;
     }
 

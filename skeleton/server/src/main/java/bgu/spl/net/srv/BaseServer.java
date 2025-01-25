@@ -3,6 +3,7 @@ package bgu.spl.net.srv;
 import bgu.spl.net.api.MessageEncoderDecoder;
 import bgu.spl.net.api.MessagingProtocol;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.function.Supplier;
@@ -19,6 +20,9 @@ public abstract class BaseServer<T> implements Server<T> {
     private final Supplier<MessageEncoderDecoder<T>> encdecFactory;
     private ServerSocket sock;
 
+    //i added for the connrction id gennerator
+    private static int connectionCounter = 0; 
+
     public BaseServer(
             int port,
             Supplier<MessagingProtocol<T>> protocolFactory,
@@ -34,25 +38,38 @@ public abstract class BaseServer<T> implements Server<T> {
     public void serve() {
 
         try (ServerSocket serverSock = new ServerSocket(port)) {
+        
 			System.out.println("Server started");
 
             this.sock = serverSock; //just to be able to close
+
+            Connections<T> connections = new ConnectionsImpl<>(); 
 
             while (!Thread.currentThread().isInterrupted()) {
 
                 Socket clientSock = serverSock.accept();
 
+                int connectionId = generateConnectionId();
+
                 BlockingConnectionHandler<T> handler = new BlockingConnectionHandler<>(
                         clientSock,
                         encdecFactory.get(),
-                        protocolFactory.get());
-
+                        protocolFactory.get(),
+                        connectionId,
+                        connections);
+                connections.addClient(connectionId, handler);
                 execute(handler);
             }
         } catch (IOException ex) {
+            System.out.println("[dubug] entered catch!!!");
         }
 
         System.out.println("server closed!!!");
+    }
+
+    public static synchronized int generateConnectionId() {
+        connectionCounter++; // מגדיל את המונה עבור כל חיבור חדש
+        return connectionCounter; // מחזיר את המזהה הייחודי
     }
 
     @Override

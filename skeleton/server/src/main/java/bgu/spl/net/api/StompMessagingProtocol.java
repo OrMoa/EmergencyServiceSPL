@@ -11,12 +11,8 @@ public interface StompMessagingProtocol<T> extends MessagingProtocol<T> {
     void start(int connectionId, Connections<T> connections);
     
     //void process(T message);
-    default T process(T message) {
-        processInternal(message); // Call a void method internally
-        return null; // Since MessagingProtocol expects a return, return null
-    }
-
-    void processInternal(T message);
+    T process(T message);
+    
 	
 	/**
      * @return true if the connection should be terminated

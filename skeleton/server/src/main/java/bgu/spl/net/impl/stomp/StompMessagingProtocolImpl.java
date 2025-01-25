@@ -1,9 +1,10 @@
 package bgu.spl.net.impl.stomp;
 
 import bgu.spl.net.api.StompMessagingProtocol;
+import bgu.spl.net.impl.rci.Command;
 import bgu.spl.net.srv.Connections;
 import bgu.spl.net.srv.ConnectionsImpl;
-
+import java.io.Serializable;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class StompMessagingProtocolImpl implements StompMessagingProtocol<String> {
@@ -12,7 +13,7 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
  private Connections<String> connections;
  private boolean shouldTerminate;
 
- private static ConcurrentHashMap<String, String> registeredUsers = new ConcurrentHashMap<>();
+ public static ConcurrentHashMap<String, String> registeredUsers = new ConcurrentHashMap<>();
  private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, String>> subscriptions = new ConcurrentHashMap<>();
  private static ConcurrentHashMap<String, Integer> activeConnections = new ConcurrentHashMap<>();
 
@@ -24,68 +25,89 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      this.connections = connections;
      this.shouldTerminate = false;
  }
+
  @Override
  public boolean shouldTerminate() {
      return shouldTerminate;
  }
  @Override
- public void processInternal( String message) {
+ public String process(String message) {
      String[] lines = message.split("\n");
      String command = lines[0];
 
+     System.out.println("[DEBUG] input is :" + message);
+
      switch (command) {
          case "CONNECT":
-             processConnect(lines);
-             break;         
+             return processConnect(lines);
+             /*break;
          case "SEND":
              processSend(lines);
-             break;
+             break;*/
          case "SUBSCRIBE":
-             processSubscribe(lines);
-             break;
+             return processSubscribe(lines);
+             /*break;
          case "UNSUBSCRIBE":
              processUnsubscribe(lines);
              break;
          case "DISCONNECT":
              processDisconnect(lines);
-             break;
+             break; */
          default:
              handleError("Unknown command: " + command, null);
              break;
      }
+     return null;
  }
+
  // process commands impl
- private void processConnect(String[] lines) {
+ private String processConnect(String[] lines) {
      String username = null;
      String password = null;
+     String version = null;
 
+     System.out.println("[DEBUG] Received CONNECT frame:");
+     
      for (String line : lines) {
          if (line.startsWith("login:")) {
              username = line.substring(6);
+             System.out.println("[DEBUG] username is:" + username);
          } else if (line.startsWith("passcode:")) {
              password = line.substring(9);
-         }
+             System.out.println("[DEBUG] password is:" + password);
+         } else if (line.startsWith("accept-version:")) {
+             version = line.substring(15).trim();  // חיפוש גרסה מתוך ההודעה
+             System.out.println("[DEBUG] accept-version is: " + version);
+        }
      }
 
      if (registeredUsers.containsKey(username)) {
          if (!registeredUsers.get(username).equals(password)) {
              handleError("Wrong password", null);
-             return;
+             return null;
          }
          if (activeConnections.containsKey(username)) {
              handleError("User already logged in", null);
-             return;
+             return null;
          }
      } else {
          registeredUsers.put(username, password);
      }
      activeConnections.put(username, connectionId);
 
-     String connectedFrame = "CONNECTED\nversion:1.2\n\n\u0000";
+     // יצירת המיתוג עם הגרסה
+    StringBuilder builder = new StringBuilder();
+    builder.append("CONNECTED");
+    builder.append("\n");
+    builder.append("version:");
+    builder.append(version);
+    builder.append("\n");
+    builder.append("\n");
 
-     //צריך עוד לבנות את פונקציית השליחה הזו בצורה נכונה 
-     //עדיין לא כתבתי את send היא ב ConnectionsImpl<T>
-     connections.send(connectionId, connectedFrame);
+    String connectedFrame = builder.toString();
+    
+    connections.send(connectionId, connectedFrame);
+    return connectedFrame;
     }
 
  private void processSend(String[] lines) {
@@ -122,13 +144,12 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
          destination,
          body.toString()
      );
-     //צריך עוד לבנות את פונקציית השליחה הזו בצורה נכונה 
-     //עדיין לא כתבתי את send היא ב ConnectionsImpl<T>
+     
      connections.send(destination, messageFrame);
 
  }
 
- private void processSubscribe(String[] lines) {
+ private String processSubscribe(String[] lines) {
      String destination = null;
      String subscriptionId = null;
      String receiptId = null;
@@ -144,8 +165,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      }
 
      if (destination == null || receiptId == null) {
-         handleError("Missing destination or id header", receiptId);
-         return;
+         handleError("[DEBUG] Missing destination or id header", receiptId);
+         return null;
      }
 
      subscriptions.putIfAbsent(destination, new ConcurrentHashMap<>());
@@ -154,6 +175,17 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      sendReceipt(connectionId, receiptId);
 
      System.out.println("Joined channel " + destination);
+    
+    StringBuilder builder = new StringBuilder();
+    builder.append("RECEIPT");
+    builder.append("\n");
+    builder.append("receipt-id:");
+    builder.append(receiptId);
+    builder.append("\n");
+    builder.append("\n");
+
+    String connectedFrame = builder.toString();
+     return connectedFrame;
 
  }
  private void sendReceipt(int connectionId, String receiptId) {
@@ -229,6 +261,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      connections.send(connectionId, errorFrame.toString());
      shouldTerminate = true;
 
- }   
+ }  
 
 }

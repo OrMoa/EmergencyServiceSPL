@@ -6,6 +6,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Arrays;
 
 /*This pattern corresponds to the Thread-Per-Client (TPC) pattern,
  where each client is handled by a separate thread.*/
@@ -22,14 +23,18 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     private BufferedOutputStream out;
     private volatile boolean connected = true;
 
-    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, MessagingProtocol<T> protocol) {
+    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, 
+    MessagingProtocol<T> protocol, int connectionId, Connections<T> connections) {
         this.sock = sock;
         this.encdec = reader;
         this.protocol = protocol;
+        this.protocol.start(connectionId, connections);
+        System.out.println("[DEBUG] i've created an BlockingConnectionHandler");
     }
 
     @Override
     public void run() {
+        System.out.println("[DEBUG] i'm in run method (blocking connection handler)");
         try (Socket sock = this.sock) { //just for automatic closing
             int read;
 
@@ -41,6 +46,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
                 if (nextMessage != null) {
                     T response = protocol.process(nextMessage);
                     if (response != null) {
+                        System.out.println("[DEBUG] Response: " + response);
                         out.write(encdec.encode(response));
                         out.flush();
                     }
@@ -61,6 +67,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void send(T msg) {
+        System.out.println("[DEBUG] im in send (blockingconnectionhendler) msg:");
         synchronized (this) { // Synchronize to ensure thread-safe access to the connection
             try {
             byte[] encodedMessage = encdec.encode(msg); // Encode the message into bytes
