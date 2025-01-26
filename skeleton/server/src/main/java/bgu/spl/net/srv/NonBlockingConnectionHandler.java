@@ -21,6 +21,9 @@ public class NonBlockingConnectionHandler<T> implements ConnectionHandler<T> {
     private final SocketChannel chan;
     private final Reactor reactor;
 
+    /*Suitable for the Reactor pattern,
+     where a small number of threads manage a large number of clients concurrently*/
+
     public NonBlockingConnectionHandler(
             MessageEncoderDecoder<T> reader,
             MessagingProtocol<T> protocol,
@@ -30,6 +33,8 @@ public class NonBlockingConnectionHandler<T> implements ConnectionHandler<T> {
         this.encdec = reader;
         this.protocol = protocol;
         this.reactor = reactor;
+        System.out.println("[DEBUG][NonBlockingHandler] Created new handler for channel: " + chan);
+
     }
 
     public Runnable continueRead() {
@@ -39,6 +44,7 @@ public class NonBlockingConnectionHandler<T> implements ConnectionHandler<T> {
         try {
             success = chan.read(buf) != -1;
         } catch (IOException ex) {
+            System.out.println("[DEBUG][NonBlockingHandler] Client closed connection");
             ex.printStackTrace();
         }
 
@@ -118,6 +124,18 @@ public class NonBlockingConnectionHandler<T> implements ConnectionHandler<T> {
 
     @Override
     public void send(T msg) {
-        //IMPLEMENT IF NEEDED
+        if (msg == null) return; // If the message is null, there's nothing to send
+        try {
+        byte[] encodedMessage = encdec.encode(msg); // Encode the message into a byte array
+        ByteBuffer buffer = ByteBuffer.wrap(encodedMessage); // Wrap the byte array into a ByteBuffer
+
+        writeQueue.add(buffer); // Add the ByteBuffer to the write queue
+        
+    // Update the Selector to indicate interest in both read and write operations
+        reactor.updateInterestedOps(chan, SelectionKey.OP_READ | SelectionKey.OP_WRITE);      
+        }catch (Exception e){
+            e.printStackTrace();
+        }
     }
+    
 }

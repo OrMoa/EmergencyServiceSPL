@@ -1,27 +1,22 @@
-CFLAGS:=-c -Wall -Weffc++ -g -std=c++11 -Iinclude
-LDFLAGS:=-lboost_system -lpthread
-# TODO change the makefile for StompEMIlient
-all: EchoClient
+CFLAGS := -c -Wall -Weffc++ -g -std=c++17 -Iinclude
+LDFLAGS := -lboost_system -lpthread
 
-EchoClient: bin/ConnectionHandler.o bin/echoClient.o
-	g++ -o bin/EchoClient bin/ConnectionHandler.o bin/echoClient.o $(LDFLAGS)
+# Source files excluding echoClient.cpp
+SRC_FILES := $(filter-out src/echoClient.cpp, $(wildcard src/*.cpp))
+OBJ_FILES := $(patsubst src/%.cpp,bin/%.o,$(SRC_FILES))
 
-StompWCIClient: bin/ConnectionHandler.o bin/StompClient.obin/event.o
-	g++ -o bin/StompWCIClient bin/ConnectionHandler.o bin/StompClient.o $(LDFLAGS)
+all: StompEMIClient
 
-bin/ConnectionHandler.o: src/ConnectionHandler.cpp
-	g++ $(CFLAGS) -o bin/ConnectionHandler.o src/ConnectionHandler.cpp
+$(shell mkdir -p bin)
 
-bin/echoClient.o: src/echoClient.cpp
-	g++ $(CFLAGS) -o bin/echoClient.o src/echoClient.cpp
+StompEMIClient: $(OBJ_FILES)
+	@echo "Linking object files..."
+	g++ -o bin/StompEMIClient $(OBJ_FILES) $(LDFLAGS)
 
-bin/event.o: src/event.cpp
-	g++ $(CFLAGS) -o bin/event.o src/event.cpp
-
-bin/StompClient.o: src/StompClient.cpp
-	g++ $(CFLAGS) -o bin/StompClient.o src/StompClient.cpp
+bin/%.o: src/%.cpp
+	@echo "Compiling $<..."
+	g++ $(CFLAGS) -o $@ $<
 
 .PHONY: clean
 clean:
 	rm -f bin/*
-	

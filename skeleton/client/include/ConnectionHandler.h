@@ -12,6 +12,8 @@ private:
 	const short port_;
 	boost::asio::io_service io_service_;   // Provides core I/O functionality
 	tcp::socket socket_;
+	//bool connected;
+	static const char STOMP_DELIMITER = '\0';
 
 public:
 	ConnectionHandler(std::string host, short port);
@@ -47,5 +49,8 @@ public:
 
 	// Close down the connection properly.
 	void close();
+
+	bool isConnected() const;
+
 
 }; //class ConnectionHandler

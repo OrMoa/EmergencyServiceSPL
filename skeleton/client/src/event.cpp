@@ -20,6 +20,62 @@ Event::Event(std::string channel_name, std::string city, std::string name, int d
 {
 }
 
+Event::Event(const std::string &frame_body): channel_name(""), city(""), 
+                                             name(""), date_time(0), description(""), general_information(),
+                                             eventOwnerUser("")
+{
+    stringstream ss(frame_body);
+    string line;
+    string eventDescription;
+    map<string, string> general_information_from_string;
+    bool inGeneralInformation = false;
+    while(getline(ss,line,'\n')){
+        vector<string> lineArgs;
+        if(line.find(':') != string::npos) {
+            split_str(line, ':', lineArgs);
+            string key = lineArgs.at(0);
+            string val;
+            if(lineArgs.size() == 2) {
+                val = lineArgs.at(1);
+            }
+            if(key == "user") {
+                eventOwnerUser = trim(val);
+            }
+            if(key == "channel name") {
+                channel_name = trim(val);
+            }
+            if(key == "city") {
+                city = trim(val);
+            }
+            else if(key == "event name") {
+                name = trim(val);
+            }
+            else if(key == "date time") {
+                date_time = std::stoi(val);
+            }
+            else if(key == "general information") {
+                inGeneralInformation = true;
+                continue;
+            }
+            else if(key == "description") {
+                while(getline(ss,line,'\n')) {
+                    eventDescription += line + "\n";
+                }
+                description = eventDescription;
+            }
+
+            if(inGeneralInformation) {
+                string trimmedKey = trim(key.substr(1));
+                string trimmedVal = trim(val);
+                general_information_from_string[trimmedKey] = trimmedVal; 
+                std::cout << "[DEBUG] Added general info - Key: '" << trimmedKey 
+                    << "', Value: '" << trimmedVal << "'" << std::endl;
+            }
+        }
+    }
+    general_information = general_information_from_string;
+}
+
 Event::~Event()
 {
 }
@@ -62,56 +118,21 @@ const std::string &Event::get_description() const
     return this->description;
 }
 
-Event::Event(const std::string &frame_body): channel_name(""), city(""), 
-                                             name(""), date_time(0), description(""), general_information(),
-                                             eventOwnerUser("")
-{
-    stringstream ss(frame_body);
-    string line;
-    string eventDescription;
-    map<string, string> general_information_from_string;
-    bool inGeneralInformation = false;
-    while(getline(ss,line,'\n')){
-        vector<string> lineArgs;
-        if(line.find(':') != string::npos) {
-            split_str(line, ':', lineArgs);
-            string key = lineArgs.at(0);
-            string val;
-            if(lineArgs.size() == 2) {
-                val = lineArgs.at(1);
-            }
-            if(key == "user") {
-                eventOwnerUser = val;
-            }
-            if(key == "channel name") {
-                channel_name = val;
-            }
-            if(key == "city") {
-                city = val;
-            }
-            else if(key == "event name") {
-                name = val;
-            }
-            else if(key == "date time") {
-                date_time = std::stoi(val);
-            }
-            else if(key == "general information") {
-                inGeneralInformation = true;
-                continue;
-            }
-            else if(key == "description") {
-                while(getline(ss,line,'\n')) {
-                    eventDescription += line + "\n";
-                }
-                description = eventDescription;
-            }
+void Event::split_str(const std::string& str, char delimiter, std::vector<std::string>& out) {
+    out.clear(); // Ensure the vector is empty before filling it
+    std::string token;
+    std::istringstream ss(str);
 
-            if(inGeneralInformation) {
-                general_information_from_string[key.substr(1)] = val;
-            }
+    while (std::getline(ss, token, delimiter)) {
+        if (!token.empty()) { // Skip empty tokens
+            out.push_back(token);
         }
     }
-    general_information = general_information_from_string;
+
+    // Handle case where str ends with delimiter
+    if (!str.empty() && str.back() == delimiter) {
+        out.push_back("");
+    }
 }
 
 names_and_events parseEventsFile(std::string json_path)
@@ -143,4 +164,11 @@ names_and_events parseEventsFile(std::string json_path)
     names_and_events events_and_names{channel_name, events};
 
     return events_and_names;
+}
+
+std::string Event::trim(const std::string& str) const {
+    size_t first = str.find_first_not_of(' ');
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(' ');
+    return str.substr(first, (last - first + 1));
 }

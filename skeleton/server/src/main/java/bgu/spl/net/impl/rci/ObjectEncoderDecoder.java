@@ -40,7 +40,15 @@ public class ObjectEncoderDecoder implements MessageEncoderDecoder<Serializable>
 
     @Override
     public byte[] encode(Serializable message) {
-        return serializeObject(message);
+        // המרה ל- byte[]
+        byte[] byteArray = serializeObject(message);
+
+        // הוספת תו NULL בסוף (אם הוא לא שם)
+        byte[] finalByteArray = new byte[byteArray.length + 1];
+        System.arraycopy(byteArray, 0, finalByteArray, 0, byteArray.length);
+        finalByteArray[byteArray.length] = 0;  // תו NULL (0)
+
+        return finalByteArray;
     }
 
     private Serializable deserializeObject() {

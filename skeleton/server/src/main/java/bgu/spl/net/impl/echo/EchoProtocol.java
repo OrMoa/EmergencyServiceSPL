@@ -1,6 +1,9 @@
 package bgu.spl.net.impl.echo;
 
 import bgu.spl.net.api.MessagingProtocol;
+import bgu.spl.net.srv.Connections;
+
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 public class EchoProtocol implements MessagingProtocol<String> {
@@ -23,4 +26,12 @@ public class EchoProtocol implements MessagingProtocol<String> {
     public boolean shouldTerminate() {
         return shouldTerminate;
     }
+
+    // עוד לא מימשתי זה סתם כתוב כדי להסיר הערה
+    @Override
+    public void start(int connectionId, Connections<String> connections) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'start'");
+    }
+
 }
