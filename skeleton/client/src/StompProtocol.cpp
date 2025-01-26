@@ -52,7 +52,6 @@ bool StompProtocol::connect(const std::string& host, short port,
     }
     
     currentUsername = username;
-    cout << "[DEBUG] CONNECT frame sent successfully. Waiting for server response..." << endl;
     return true;
 }
 
@@ -117,7 +116,6 @@ vector<string> StompProtocol::processInput(const string& input) {
 
     try {
         if(channelToSubId.count(channel) == 0) {
-            std::cout << "[DEBUG] New subscription for channel: " << channel << std::endl;
             int subId = nextSubscriptionId++;
             channelToSubId[channel] = subId;
             subIdToChannel[subId] = channel;
@@ -125,15 +123,13 @@ vector<string> StompProtocol::processInput(const string& input) {
             receiptIdToMsg[receipt] = "Joined channel " + channel;
             
             std::string subscribeFrame = createSubscribeFrame(channel);
-            std::cout << "[DEBUG] Created subscribe frame:\n" << subscribeFrame << std::endl;
             frames.push_back(subscribeFrame);
         } else {
             std::cout << "[DEBUG] Already subscribed to channel: " << channel << std::endl;
         }
     } catch (const std::exception& e) {
-        std::cout << "[DEBUG] Exception in join handler: " << e.what() << std::endl;
+        std::cout << "Exception in join handler: " << e.what() << std::endl;
     }
-    std::cout << "[DEBUG] Join processing complete" << std::endl;
 }
 
     else if(command == "exit") {
@@ -161,7 +157,6 @@ vector<string> StompProtocol::processInput(const string& input) {
         }
 
         try {
-            std::cout << "[DEBUG] Processing report file: " << parts[1] << std::endl;
             names_and_events eventsData = parseEventsFile(parts[1]);
 
             std::lock_guard<std::mutex> lock(dataMutex);
@@ -170,7 +165,6 @@ vector<string> StompProtocol::processInput(const string& input) {
             std::string channel = event.get_channel_name();
             saveEventForUser(channel, currentUsername, event);
             std::string frame = createSendFrame(channel, formatEventMessage(event));
-            std::cout << "[DEBUG] Created frame:\n" << frame << std::endl;
             frames.push_back(frame);
             }
         }
@@ -192,13 +186,11 @@ vector<string> StompProtocol::processInput(const string& input) {
     else if(command == "logout") {
         string frame = createDisconnectFrame();
         frames.push_back(frame);
-        std::cout << "[DEBUG] Added DISCONNECT frame to frames vector" << std::endl;
     }
     else {
         std::cout << "Unknown command: " << command << std::endl;
     }
 
-    std::cout << "[DEBUG] Number of frames to send: " << frames.size() << std::endl;
     return frames;
 }
 
@@ -215,15 +207,12 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "ERROR") {
         cout << "Error: " << lines[lines.size()-1] << endl;
-        //shouldTerminate = true; // Signal threads to stop
         disconnect();
         return;
     }
     else if(lines[0] == "RECEIPT") {
         string receiptId = getHeader("receipt-id", lines);
         
-        std::cout << "[DEBUG] Got RECEIPT with id: " << receiptId << std::endl;
-
         string msg;
         {
             std::lock_guard<std::mutex> lock(dataMutex);
@@ -246,7 +235,6 @@ void StompProtocol::processResponse(const string& response) {
         if(channel[0] == '/') {
             channel = channel.substr(1);
         }
-        std::cout << "[DEBUG] channel name from getHeader" << channel << std::endl;
         string messageBody;
 
         bool headerEnded = false;
@@ -262,12 +250,10 @@ void StompProtocol::processResponse(const string& response) {
         }
         
         if(messageBody.empty()) {
-            std::cout << "[DEBUG] Message body is still empty after parsing." << std::endl;
             return;
         }
         
         if(!messageBody.empty()) {
-            std::cout << "[DEBUG] Parsed message body:\n" << messageBody << std::endl;
             try {
                 Event event(messageBody);
 
@@ -307,9 +293,6 @@ std::string StompProtocol::createSubscribeFrame(const std::string& channel) {
           << "destination:" << channel << "\n"  // Added leading '/' as per examples
           << "id:" << channelToSubId[channel] << "\n"
           << "receipt:" << receiptId << "\n\n";
-    
-    std::cout << "[DEBUG] Sending SUBSCRIBE frame for channel: " << channel 
-              << " with receipt: " << receiptId << std::endl;
               
     return frame.str();
 }
@@ -330,7 +313,7 @@ string StompProtocol::formatEventMessage(const Event& event) const {
        << "date time: " << event.get_date_time() << "\n"
        << "general information:\n";
     
-    // Add general information fields
+    //Add general information fields
     const auto& info = event.get_general_information();
     for(const auto& [key, value] : info) {
         ss << "  " << key << ": " << value << "\n";
@@ -361,7 +344,6 @@ string StompProtocol::createDisconnectFrame() {
     frame << "DISCONNECT\n"
           << "receipt:" << receiptId << "\n\n";
           
-    std::cout << "[DEBUG] Sending frame with receipt: " << receiptId << std::endl;
     return frame.str();
 }
 
@@ -405,8 +387,6 @@ string StompProtocol::getHeader(const string& header, const vector<string>& line
 }
 
 void StompProtocol::saveEventForUser(const string& channel, const string& user, const Event& event) {
-    std::cout << "[DEBUG] Saving event for user: " << user << " in channel: " << channel << std::endl;
-
     string key = channel + "_" + user;
     std::cout << "[DEBUG] key saved: " << key <<  std::endl;
     userChannelEvents[key].push_back(event);
@@ -414,13 +394,8 @@ void StompProtocol::saveEventForUser(const string& channel, const string& user, 
 
 void StompProtocol::writeEventSummary(const string& channel, const string& user, const string& filename) {
 
-    std::cout << "[DEBUG] writeEventSummary called with channel: " << channel 
-              << ", user: " << user << ", filename: " << filename << std::endl;
-
-
     std::vector<Event> events;
     string key = channel + "_" + user;
-    std::cout << "[DEBUG] Generated key: " << key << std::endl;
     int activeEvents = 0;
     int forcesArrived = 0;
    
@@ -476,7 +451,6 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     }
 
     file.close();
-    std::cout << "[DEBUG] File closed successfully" << std::endl;
 
 }
 

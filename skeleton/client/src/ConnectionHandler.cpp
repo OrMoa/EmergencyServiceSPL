@@ -31,7 +31,6 @@ bool ConnectionHandler::connect() {
         std::cerr << "Connection failed (Error: " << e.what() << ')' << std::endl;
         return false;
     }
-    std::cout << "[DEBUG] Successfully connected to server" << std::endl;
     return true;
 }
 
@@ -64,7 +63,6 @@ bool ConnectionHandler::sendBytes(const char bytes[], int bytesToWrite) {
         std::cerr << "recv failed in sendBytes: (Error: " << e.what() << ')' << std::endl;
         return false;
     }
-    std::cout << "[DEBUG] Successfully sent " << tmp << " bytes" << std::endl;
     return true;
 }
 
@@ -84,14 +82,12 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
     try {
         do {
             if (!getBytes(&ch, 1)) {
-                std::cout << "[DEBUG] Failed to read byte from socket" << std::endl;
                 return false;
             }
             if (ch != '\0')
                 frame.append(1, ch);
         } while (delimiter != ch && ch != '\0');
         if (frame.length() > 0) {  // Only return true if we actually got something
-            std::cout << "[DEBUG] Successfully Read frame: \n" << frame << std::endl;
             return true;
         }
         return false; 
@@ -103,25 +99,20 @@ bool ConnectionHandler::getFrameAscii(std::string &frame, char delimiter) {
 }
 
 bool ConnectionHandler::sendFrameAscii(const std::string &frame, char delimiter) {
-    std::cout << "[DEBUG] Sending frame:\n" << frame << std::endl;
     bool result = sendBytes(frame.c_str(), frame.length());
     if (!result) {
-        std::cout << "[DEBUG] Failed to send frame body" << std::endl;
         return false;
     }
     result = sendBytes(&delimiter, 1);
     if (!result) {
-        std::cout << "[DEBUG] Failed to send delimiter" << std::endl;
         return false;
     }
-    std::cout << "[DEBUG] Frame sent successfully" << std::endl;
     return true;
 }
 
 // Close down the connection properly.
 void ConnectionHandler::close() {
     try {
-        std::cout << "[DEBUG] Closing connection" << std::endl;
         socket_.close();
     } catch (...) {
         std::cout << "closing failed: connection already closed" << std::endl;

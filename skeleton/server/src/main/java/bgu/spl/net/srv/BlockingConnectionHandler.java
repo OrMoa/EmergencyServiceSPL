@@ -6,7 +6,6 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Arrays;
 
 /*This pattern corresponds to the Thread-Per-Client (TPC) pattern,
  where each client is handled by a separate thread.*/
@@ -22,36 +21,41 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     private BufferedInputStream in;
     private BufferedOutputStream out;
     private volatile boolean connected = true;
+    private final Connections<T> connections;
 
     public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, 
     MessagingProtocol<T> protocol, int connectionId, Connections<T> connections) {
         this.sock = sock;
         this.encdec = reader;
         this.protocol = protocol;
-        this.protocol.start(connectionId, connections);
-        System.out.println("[DEBUG] i've created an BlockingConnectionHandler");
+        this.connections = connections;
+        protocol.start(connectionId, connections); 
     }
 
     @Override
     public void run() {
         System.out.println("[DEBUG] i'm in run method (blocking connection handler)");
+        
         try (Socket sock = this.sock) { //just for automatic closing
-            int read;
-
             in = new BufferedInputStream(sock.getInputStream());
             out = new BufferedOutputStream(sock.getOutputStream());
 
-            while (!protocol.shouldTerminate() && connected && (read = in.read()) >= 0) {
-                T nextMessage = encdec.decodeNextByte((byte) read);
-                if (nextMessage != null) {
-                    T response = protocol.process(nextMessage);
-                    if (response != null) {
-                        System.out.println("[DEBUG] Response: " + response);
-                        out.write(encdec.encode(response));
-                        out.flush();
+            while (!protocol.shouldTerminate() && connected )  { //&&   (read = in.read()) >= 0) 
+                int read = in.read();
+                if (read >= 0) {
+                    T nextMessage = encdec.decodeNextByte((byte) read);
+                    if (nextMessage != null) {
+                        T response = protocol.process(nextMessage);
+                        if (response != null) {
+                            System.out.println("[DEBUG] Response: " + response);
+                            out.write(encdec.encode(response));
+                            out.flush();
+                        }
                     }
                 }
             }
+
+
 
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -65,7 +69,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
         sock.close();
     }
 
-    @Override
+   /* @Override
     public void send(T msg) {
         System.out.println("[DEBUG] im in send (blockingconnectionhendler) msg:");
         synchronized (this) { // Synchronize to ensure thread-safe access to the connection
@@ -79,6 +83,15 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
             connected = false; // Mark the connection as no longer active
             }
         }
-    }
+    }*/
 
+    @Override
+    public void send(T msg) {
+        try {
+            out.write(encdec.encode(msg));
+            out.flush();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
 }

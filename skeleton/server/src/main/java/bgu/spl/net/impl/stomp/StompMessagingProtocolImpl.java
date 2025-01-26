@@ -15,92 +15,99 @@ import java.util.HashMap;
 
 
 public class StompMessagingProtocolImpl implements StompMessagingProtocol<String> {
- //fileds
- private int connectionId;
- private Connections<String> connections;
- private boolean shouldTerminate;
+//fileds
+    private int connectionId;
+    private Connections<String> connections;
+    private boolean shouldTerminate;
 
- public static ConcurrentHashMap<String, String> registeredUsers = new ConcurrentHashMap<>();
- private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, String>> subscriptions = new ConcurrentHashMap<>();
- private static ConcurrentHashMap<String, Integer> activeConnections = new ConcurrentHashMap<>();
+    public static ConcurrentHashMap<String, String> registeredUsers = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, String>> subscriptions = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, Integer> activeConnections = new ConcurrentHashMap<>();
 
 
- //functions
- @Override
- public void start(int connectionId, Connections<String> connections) {
-     this.connectionId = connectionId;
-     this.connections = connections;
-     this.shouldTerminate = false;
- }
+    //functions
+    @Override
+    public void start(int connectionId, Connections<String> connections) {
+        this.connectionId = connectionId;
+        this.connections = connections;
+        this.shouldTerminate = false;
+    }
 
- @Override
- public boolean shouldTerminate() {
-     return shouldTerminate;
- }
- @Override
- public String process(String message) {
-     String[] lines = message.split("\n");
-     String command = lines[0];
+    @Override
+    public boolean shouldTerminate() {
+        return shouldTerminate;
+    }
+    @Override
+    public String process(String message) {
+        String[] lines = message.split("\n");
+        String command = lines[0];
 
-     System.out.println("[DEBUG] input is :" + message);
+        System.out.println("[DEBUG] input is :" + message);
 
-     switch (command) {
-         case "CONNECT":
-             return processConnect(lines);
-             
-         case "SEND":
-             return processSend(lines);
-             
-         case "SUBSCRIBE":
-             return processSubscribe(lines);
-             
-         case "UNSUBSCRIBE":
-             return processUnsubscribe(lines);
-             
-         case "DISCONNECT":
-             processDisconnect(lines);
-             break;
-         default:
-             handleError("Unknown command: " + command, null);
-             break;
-     }
-     return null;
- }
-
- // process commands impl
- private String processConnect(String[] lines) {
-     String username = null;
-     String password = null;
-     String version = null;
-
-     System.out.println("[DEBUG] Received CONNECT frame:");
-     
-     for (String line : lines) {
-         if (line.startsWith("login:")) {
-             username = line.substring(6);
-             System.out.println("[DEBUG] username is:" + username);
-         } else if (line.startsWith("passcode:")) {
-             password = line.substring(9);
-             System.out.println("[DEBUG] password is:" + password);
-         } else if (line.startsWith("accept-version:")) {
-             version = line.substring(15).trim();  // חיפוש גרסה מתוך ההודעה
-             System.out.println("[DEBUG] accept-version is: " + version);
+        switch (command) {
+            case "CONNECT":
+                return processConnect(lines);
+                
+            case "SEND":
+                return processSend(lines);
+                
+            case "SUBSCRIBE":
+                return processSubscribe(lines);
+                
+            case "UNSUBSCRIBE":
+                return processUnsubscribe(lines);
+                
+            case "DISCONNECT":
+                return processDisconnect(lines);
+            default:
+                handleError("Unknown command: " + command, null);
+                break;
         }
-     }
+        return null;
+    }
 
-     if (registeredUsers.containsKey(username)) {
-         if (!registeredUsers.get(username).equals(password)) {
-             handleError("Wrong password", null);
-             return null;
-         }
-         if (activeConnections.containsKey(username)) {
-             handleError("User already logged in", null);
-             return null;
-         }
-     } else {
-         registeredUsers.put(username, password);
-     }
-     activeConnections.put(username, connectionId);
+    // process commands impl
+    private String processConnect(String[] lines) {
+        String username = null;
+        String password = null;
+        String version = null;
+        String host = null;
+
+
+        System.out.println("[DEBUG] Received CONNECT frame:");
+        
+        for (String line : lines) {
+            if (line.startsWith("login:")) {
+                username = line.substring(6);
+                System.out.println("[DEBUG] username is:" + username);
+            } else if (line.startsWith("passcode:")) {
+                password = line.substring(9);
+                System.out.println("[DEBUG] password is:" + password);
+            } else if (line.startsWith("accept-version:")) {
+                version = line.substring(15).trim();  // חיפוש גרסה מתוך ההודעה
+                System.out.println("[DEBUG] accept-version is: " + version);
+            }else if (line.startsWith("host:")) {
+            host = line.substring(5).trim();
+            }
+        }
+    if (username == null || password == null || version == null || host == null) {
+        handleError("Missing required headers", null);
+        return null;
+    }
+
+        if (registeredUsers.containsKey(username)) {
+            if (!registeredUsers.get(username).equals(password)) {
+                handleError("Wrong password", null);
+                return null;
+            }
+            if (activeConnections.containsKey(username)) {
+                handleError("User already logged in", null);
+                return null;
+            }
+        } else {
+            registeredUsers.put(username, password);
+        }
+        activeConnections.put(username, connectionId);
 
     StringBuilder builder = new StringBuilder();
     builder.append("CONNECTED");
@@ -111,26 +118,22 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     builder.append("\n");
 
     String connectedFrame = builder.toString();
-    
-    connections.send(connectionId, connectedFrame);
-    return null;
+
+    return connectedFrame;
     }
 
- private String processSubscribe(String[] lines) {
-     String destination = null;
-     String subscriptionId = null;
-     String receiptId = null;
+    private String processSubscribe(String[] lines) {
+        String destination = null;
+        String subscriptionId = null;
+        String receiptId = null;
 
-     for (String line : lines) {
+        for (String line : lines) {
         if (line.startsWith("destination:")) {
-            destination = line.substring(12);
+            destination = line.substring(12).trim();
 
             if (destination.startsWith("/")) {
                 destination = destination.substring(1);
-             }
-             if (destination.endsWith("/")) {
-                destination = destination.substring(0, destination.length() - 1); 
-             }
+            }
         } else if (line.startsWith("id:")) {
             subscriptionId = line.substring(3).trim(); 
         } else if (line.startsWith("receipt:")) {
@@ -140,56 +143,46 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
     System.out.println("[DEBUG] Subscribe - destination: " + destination + ", id: " + subscriptionId);
 
-     if (destination == null || subscriptionId == null || receiptId == null) {
-         handleError("[DEBUG] Missing destination or id header or recipt id ", receiptId);
-         return null;
-     }
+        if (destination == null || subscriptionId == null) {
+            handleError("[DEBUG] Missing destination or id header or recipt id ", receiptId);
+            return null;
+        }
 
-     connections.subscribe(destination, connectionId, subscriptionId);
+        if (!connections.subscribe(destination, connectionId, subscriptionId)) {
+        handleError("Failed to subscribe", receiptId);
+        return null;
+    }
 
-
-     //subscriptions.putIfAbsent(destination, new ConcurrentHashMap<>());
-     //subscriptions.get(destination).put(connectionId, subscriptionId);
-
-     System.out.println("[DEBUG] After adding subscriber:");
-     System.out.println("[DEBUG] Subscriptions map: " + subscriptions);
-     System.out.println("[DEBUG] Active connections map: " + activeConnections);
-
-    
-     /*StringBuilder builder = new StringBuilder();
-     builder.append("RECEIPT");
-     builder.append("\n");
-     builder.append("receipt-id:");
-     builder.append(receiptId);
-     builder.append("\n");
-     builder.append("\n");*/
-
-     StringBuilder builder = new StringBuilder();
-     builder.append("RECEIPT\n");
-     builder.append("receipt-id:").append(receiptId).append("\n\n");
-
-     System.out.println("Joined channel " + destination);
-     String receipt = builder.toString();
-     connections.send(connectionId, receipt);
-    
-     return receipt;
-
- }
+    if (receiptId == null) {
+        handleError("Missing receipt header", null);
+        return null;
+    }
 
 
-private String processSend(String[] lines) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("RECEIPT\n");
+        builder.append("receipt-id:").append(receiptId).append("\n\n");
+
+        System.out.println("Joined channel " + destination);
+        String receipt = builder.toString();
+
+        return receipt;
+    }
+
+
+    private String processSend(String[] lines) {
     String destination = null;
-    
+
     // Extract destination
     for (String line : lines) {
         if (line.startsWith("destination:/")) {
             destination = line.substring(12);
             if (destination.startsWith("/")) {
                 destination = destination.substring(1);
-             }
-             if (destination.endsWith("/")) {
+                }
+                if (destination.endsWith("/")) {
                 destination = destination.substring(0, destination.length() - 1); 
-             }
+                }
             break;
         }
     }
@@ -209,9 +202,9 @@ private String processSend(String[] lines) {
     String messageFrame = "MESSAGE\n" + String.join("\n", lines).replace("SEND\n", "");
     connections.send(destination, messageFrame);
     return null;
-}
-  
-/*private String processUnsubscribe(String[] lines) {
+    }
+
+    /*private String processUnsubscribe(String[] lines) {
     String subscriptionId = null;
     String receiptId = null;
 
@@ -219,13 +212,13 @@ private String processSend(String[] lines) {
         if (line.startsWith("id:")) {
             subscriptionId = line.substring(3);
         } else if (line.startsWith("receipt:")) {
-         receiptId = line.substring(8);
+            receiptId = line.substring(8);
         }
     }
 
-     boolean removed = false;
+        boolean removed = false;
 
-     for (String destination : subscriptions.keySet()) {
+        for (String destination : subscriptions.keySet()) {
         ConcurrentHashMap<Integer, String> subscribers = subscriptions.get(destination);
 
         if (subscribers.containsKey(connectionId) && subscribers.get(connectionId).equals(subscriptionId)) {
@@ -239,7 +232,7 @@ private String processSend(String[] lines) {
             handleError("Subscription ID not found: " + subscriptionId, receiptId);
             return null;
         }
-     }
+        }
 
     StringBuilder builder = new StringBuilder();
         builder.append("RECEIPT");
@@ -254,9 +247,9 @@ private String processSend(String[] lines) {
 
     return connectedFrame;
 
- }*/
+    }*/
 
- private String processUnsubscribe(String[] lines) {
+    private String processUnsubscribe(String[] lines) {
     String subscriptionId = null;
     String receiptId = null;
 
@@ -274,11 +267,8 @@ private String processSend(String[] lines) {
         return null;
     }
 
-    // הסרת המנוי באמצעות connections.unsubscribe
-    boolean unsubscribed = ((ConnectionsImpl<String>) connections).unsubscribe(subscriptionId, connectionId);
-
-    if (!unsubscribed) {
-        handleError("Subscription ID not found: " + subscriptionId, receiptId);
+    if (!((ConnectionsImpl<String>) connections).unsubscribe(subscriptionId, connectionId)) {
+        handleError("Not subscribed with this ID", receiptId);
         return null;
     }
 
@@ -292,30 +282,28 @@ private String processSend(String[] lines) {
 
     String receiptFrame = builder.toString();
 
-    connections.send(connectionId, receiptFrame);
-
     return receiptFrame;
-}
-
-
-private void handleError(String errorMessage, String receiptId) {
-
-     StringBuilder errorFrame = new StringBuilder();
-
-     errorFrame.append("ERROR\n");
-
-     errorFrame.append("message:").append(errorMessage).append("\n");
-
-     if (receiptId != null && !receiptId.isEmpty()) {
-     errorFrame.append("receipt-id:").append(receiptId).append("\n");
     }
 
-     errorFrame.append("\n\u0000");
-     connections.send(connectionId, errorFrame.toString());
-     shouldTerminate = true;
- }  
 
- private void processDisconnect(String[] lines) {
+    private void handleError(String errorMessage, String receiptId) {
+
+        StringBuilder errorFrame = new StringBuilder();
+
+        errorFrame.append("ERROR\n");
+
+        errorFrame.append("message:").append(errorMessage).append("\n");
+
+        if (receiptId != null && !receiptId.isEmpty()) {
+        errorFrame.append("receipt-id:").append(receiptId).append("\n");
+    }
+
+        errorFrame.append("\n");
+        connections.send(connectionId, errorFrame.toString());
+        shouldTerminate = true;
+    }  
+
+    private String processDisconnect(String[] lines) {
     String receiptId = null;
     for (String line : lines) {
         if (line.startsWith("receipt:")) {
@@ -326,15 +314,13 @@ private void handleError(String errorMessage, String receiptId) {
 
     if (receiptId == null) {
         handleError("Missing receipt header", null);
+        return null;
     }
 
-    // Send receipt before disconnecting
-    String receipt = String.format("RECEIPT\nreceipt-id:%s\n\n", receiptId);
-    connections.send(connectionId, receipt);
-    
-    // Disconnect client
-    connections.disconnect(connectionId);
+    String receipt = String.format("RECEIPT\nreceipt-id:%s\n\n", receiptId);    
+    //connections.disconnect(connectionId);
     shouldTerminate = true;
-    
-}
+    return receipt;
+
+    }
 }

@@ -80,6 +80,7 @@ public abstract class BaseServer<T> implements Server<T> {
 			sock.close();
     }
 
-    protected abstract void execute(BlockingConnectionHandler<T>  handler);
-
+    protected  void execute(BlockingConnectionHandler<T>  handler){
+        new Thread(handler).start();
+    }
 }

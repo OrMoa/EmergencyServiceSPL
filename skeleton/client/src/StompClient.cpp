@@ -14,13 +14,12 @@ int main(int argc, char *argv[]) {
     keyboardInput.start();
     
     //while(!protocol.shouldStop()) {
-    while(true) {  // Changed from !protocol.shouldStop()
+    while(true) {  
             if(protocol.isConnected()) {
                 std::string response;
     
                 if(protocol.receiveFrame(response)) {
                     if(!response.empty()) {
-                        std::cout << "[DEBUG] Received response:\n" << response << std::endl;
                         protocol.processResponse(response);
                     }
                 }

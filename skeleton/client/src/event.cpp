@@ -24,7 +24,6 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
                                              name(""), date_time(0), description(""), general_information(),
                                              eventOwnerUser("")
 {
-    std::cout << "[DEBUG] Starting to parse frame body" << std::endl;
     stringstream ss(frame_body);
     string line;
     string eventDescription;
@@ -44,7 +43,6 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
             }
             if(key == "channel name") {
                 channel_name = trim(val);
-                std::cout << "[DEBUG] Set channel_name: " << val << std::endl;
             }
             if(key == "city") {
                 city = trim(val);
@@ -64,7 +62,6 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
                     eventDescription += line + "\n";
                 }
                 description = eventDescription;
-                std::cout << "[DEBUG] Set description: " << description << std::endl;
             }
 
             if(inGeneralInformation) {
