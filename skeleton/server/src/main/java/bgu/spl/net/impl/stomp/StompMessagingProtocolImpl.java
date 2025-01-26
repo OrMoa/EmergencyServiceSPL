@@ -37,12 +37,11 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     public boolean shouldTerminate() {
         return shouldTerminate;
     }
+    
     @Override
     public String process(String message) {
         String[] lines = message.split("\n");
         String command = lines[0];
-
-        System.out.println("[DEBUG] input is :" + message);
 
         switch (command) {
             case "CONNECT":
@@ -66,26 +65,19 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         return null;
     }
 
-    // process commands impl
     private String processConnect(String[] lines) {
         String username = null;
         String password = null;
         String version = null;
         String host = null;
-
-
-        System.out.println("[DEBUG] Received CONNECT frame:");
         
         for (String line : lines) {
             if (line.startsWith("login:")) {
                 username = line.substring(6);
-                System.out.println("[DEBUG] username is:" + username);
             } else if (line.startsWith("passcode:")) {
                 password = line.substring(9);
-                System.out.println("[DEBUG] password is:" + password);
             } else if (line.startsWith("accept-version:")) {
-                version = line.substring(15).trim();  // חיפוש גרסה מתוך ההודעה
-                System.out.println("[DEBUG] accept-version is: " + version);
+                version = line.substring(15).trim(); 
             }else if (line.startsWith("host:")) {
             host = line.substring(5).trim();
             }
@@ -95,19 +87,19 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         return null;
     }
 
-        if (registeredUsers.containsKey(username)) {
-            if (!registeredUsers.get(username).equals(password)) {
-                handleError("Wrong password", null);
-                return null;
-            }
-            if (activeConnections.containsKey(username)) {
-                handleError("User already logged in", null);
-                return null;
-            }
-        } else {
-            registeredUsers.put(username, password);
+    if (registeredUsers.containsKey(username)) {
+        if (!registeredUsers.get(username).equals(password)) {
+            handleError("Wrong password", null);
+            return null;
         }
-        activeConnections.put(username, connectionId);
+        if (activeConnections.containsKey(username)) {
+            handleError("User already logged in", null);
+            return null;
+        }
+    } else {
+        registeredUsers.put(username, password);
+    }
+    activeConnections.put(username, connectionId);
 
     StringBuilder builder = new StringBuilder();
     builder.append("CONNECTED");
@@ -141,10 +133,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         }
     }
 
-    System.out.println("[DEBUG] Subscribe - destination: " + destination + ", id: " + subscriptionId);
-
         if (destination == null || subscriptionId == null) {
-            handleError("[DEBUG] Missing destination or id header or recipt id ", receiptId);
+            handleError("Missing destination or id header or recipt id ", receiptId);
             return null;
         }
 
@@ -168,7 +158,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
         return receipt;
     }
-
 
     private String processSend(String[] lines) {
     String destination = null;
@@ -194,9 +183,10 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
     // Check subscription
     if (!((ConnectionsImpl<String>)connections).isUserSubscribedToTopic(connectionId, destination)) {
-        handleError("Not subscribed to topic: " + destination, null);
+        handleError("User not subscribed to topic " + destination, null);
         return null;
     }
+    
 
     // Convert to MESSAGE frame
     String messageFrame = "MESSAGE\n" + String.join("\n", lines).replace("SEND\n", "");
@@ -204,56 +194,10 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     return null;
     }
 
-    /*private String processUnsubscribe(String[] lines) {
-    String subscriptionId = null;
-    String receiptId = null;
-
-    for (String line : lines) {
-        if (line.startsWith("id:")) {
-            subscriptionId = line.substring(3);
-        } else if (line.startsWith("receipt:")) {
-            receiptId = line.substring(8);
-        }
-    }
-
-        boolean removed = false;
-
-        for (String destination : subscriptions.keySet()) {
-        ConcurrentHashMap<Integer, String> subscribers = subscriptions.get(destination);
-
-        if (subscribers.containsKey(connectionId) && subscribers.get(connectionId).equals(subscriptionId)) {
-            subscribers.remove(connectionId);
-            removed = true;
-            System.out.println("Exited channel " + destination);
-            break;
-        }
-
-        if (!removed) {
-            handleError("Subscription ID not found: " + subscriptionId, receiptId);
-            return null;
-        }
-        }
-
-    StringBuilder builder = new StringBuilder();
-        builder.append("RECEIPT");
-        builder.append("\n");
-        builder.append("receipt-id:");
-        builder.append(receiptId);
-        builder.append("\n");
-        builder.append("\n");
-
-    String connectedFrame = builder.toString();
-    connections.send(connectionId, connectedFrame);
-
-    return connectedFrame;
-
-    }*/
-
     private String processUnsubscribe(String[] lines) {
     String subscriptionId = null;
     String receiptId = null;
 
-    // שליפת subscriptionId ו־receiptId מתוך השורות
     for (String line : lines) {
         if (line.startsWith("id:")) {
             subscriptionId = line.substring(3).trim();
@@ -284,7 +228,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
     return receiptFrame;
     }
-
 
     private void handleError(String errorMessage, String receiptId) {
 
@@ -317,8 +260,16 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
         return null;
     }
 
+    for (Map.Entry<String, Integer> entry : activeConnections.entrySet()) {
+        if (entry.getValue() == connectionId) {
+            activeConnections.remove(entry.getKey());
+            break;
+        }
+    }
+
+    subscriptions.forEach((destination, subscribers) -> subscribers.remove(connectionId));
+
     String receipt = String.format("RECEIPT\nreceipt-id:%s\n\n", receiptId);    
-    //connections.disconnect(connectionId);
     shouldTerminate = true;
     return receipt;
 

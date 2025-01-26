@@ -6,8 +6,7 @@ KeyboardInput::KeyboardInput(StompProtocol& protocol)
     : protocol(protocol), inputThread(), shouldStop(false) {
 
     }
-
-
+    
 void KeyboardInput::run() {
 
     while(!shouldStop) {

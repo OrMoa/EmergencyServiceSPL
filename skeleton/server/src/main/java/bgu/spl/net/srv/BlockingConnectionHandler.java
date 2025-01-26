@@ -34,7 +34,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 
     @Override
     public void run() {
-        System.out.println("[DEBUG] i'm in run method (blocking connection handler)");
         
         try (Socket sock = this.sock) { //just for automatic closing
             in = new BufferedInputStream(sock.getInputStream());
@@ -47,7 +46,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
                     if (nextMessage != null) {
                         T response = protocol.process(nextMessage);
                         if (response != null) {
-                            System.out.println("[DEBUG] Response: " + response);
                             out.write(encdec.encode(response));
                             out.flush();
                         }
@@ -68,22 +66,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
         connected = false;
         sock.close();
     }
-
-   /* @Override
-    public void send(T msg) {
-        System.out.println("[DEBUG] im in send (blockingconnectionhendler) msg:");
-        synchronized (this) { // Synchronize to ensure thread-safe access to the connection
-            try {
-            byte[] encodedMessage = encdec.encode(msg); // Encode the message into bytes
-            out.write(encodedMessage); // Write the encoded message to the output stream
-            out.flush(); // Immediately flush the data to the client
-            } catch (IOException e) {
-            System.err.println("Failed to send message: " + e.getMessage()); // Log the error
-            e.printStackTrace();
-            connected = false; // Mark the connection as no longer active
-            }
-        }
-    }*/
 
     @Override
     public void send(T msg) {

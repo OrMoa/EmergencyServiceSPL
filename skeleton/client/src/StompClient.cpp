@@ -13,7 +13,6 @@ int main(int argc, char *argv[]) {
    
     keyboardInput.start();
     
-    //while(!protocol.shouldStop()) {
     while(true) {  
             if(protocol.isConnected()) {
                 std::string response;

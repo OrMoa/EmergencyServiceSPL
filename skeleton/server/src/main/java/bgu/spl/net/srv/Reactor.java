@@ -20,11 +20,11 @@ public class Reactor<T> implements Server<T> {
     private final ActorThreadPool pool;
     private Selector selector;
 
-    //added
+    
     private volatile boolean shutdown;
     private ConnectionsImpl<T> connections;
     private int connectionIdCounter;
-    //
+    
 
     private Thread selectorThread;
     private final ConcurrentLinkedQueue<Runnable> selectorTasks = new ConcurrentLinkedQueue<>();
@@ -39,19 +39,14 @@ public class Reactor<T> implements Server<T> {
         this.port = port;
         this.protocolFactory = protocolFactory;
         this.readerFactory = readerFactory;
-        //added
         this.connections = new ConnectionsImpl<>();
         this.connectionIdCounter = 0;
         this.shutdown = false;
-        System.out.println("[DEBUG][Reactor] Reactor initialization complete");
-
-        //
     }
 
     @Override
     public void serve() {
 	selectorThread = Thread.currentThread();
-    System.out.println("[DEBUG][Reactor] Starting server on selector thread: " + selectorThread.getName());
         try (Selector selector = Selector.open();
                 ServerSocketChannel serverSock = ServerSocketChannel.open()) {
 
@@ -70,13 +65,10 @@ public class Reactor<T> implements Server<T> {
                 for (SelectionKey key : selector.selectedKeys()) {
 
                     if (!key.isValid()) {
-                        System.out.println("[DEBUG][Reactor] Invalid key found, skipping");
                         continue;
                     } else if (key.isAcceptable()) {
-                        System.out.println("[DEBUG][Reactor] Accepting new connection");
                         handleAccept(serverSock, selector);
                     } else {
-                        System.out.println("[DEBUG][Reactor] Handling read/write operation");
                         handleReadWrite(key);
                     }
                 }
@@ -99,10 +91,8 @@ public class Reactor<T> implements Server<T> {
     /*package*/ void updateInterestedOps(SocketChannel chan, int ops) {
         final SelectionKey key = chan.keyFor(selector);
         if (Thread.currentThread() == selectorThread) {
-            System.out.println("[DEBUG][Reactor] Directly updating ops for channel on selector thread");
             key.interestOps(ops);
         } else {
-            System.out.println("[DEBUG][Reactor] Queueing ops update task for selector thread");
             selectorTasks.add(() -> {
                 key.interestOps(ops);
             });
@@ -112,28 +102,13 @@ public class Reactor<T> implements Server<T> {
 
 
     private void handleAccept(ServerSocketChannel serverChan, Selector selector) throws IOException {
-        /*SocketChannel clientChan = serverChan.accept();
-        clientChan.configureBlocking(false);
-        final NonBlockingConnectionHandler<T> handler = new NonBlockingConnectionHandler<>(
-                readerFactory.get(),
-                protocolFactory.get(),
-                clientChan,
-                this);
-        //added
-        connections.addConnection(connectionId, handler);
-        handler.getProtocol().start(connectionId, connections);
-        connectionId++;
-        System.out.println("new client connected");
-        //
-        clientChan.register(selector, SelectionKey.OP_READ, handler);*/
+        
         SocketChannel clientChan = serverChan.accept();
         clientChan.configureBlocking(false);
         
         final MessagingProtocol<T> protocol = protocolFactory.get();
         final int connectionId = connectionIdCounter++;
-        
-        System.out.println("[DEBUG][Reactor] New client connected. Assigned ID: " + connectionId);
-        
+                
         final NonBlockingConnectionHandler<T> handler = new NonBlockingConnectionHandler<>(
                 readerFactory.get(),
                 protocol,
@@ -144,7 +119,6 @@ public class Reactor<T> implements Server<T> {
         protocol.start(connectionId, connections);
         
         clientChan.register(selector, SelectionKey.OP_READ, handler);
-        System.out.println("[DEBUG][Reactor] Client handler registered for reading");
     }
 
     private void handleReadWrite(SelectionKey key) {
@@ -152,16 +126,13 @@ public class Reactor<T> implements Server<T> {
         NonBlockingConnectionHandler<T> handler = (NonBlockingConnectionHandler<T>) key.attachment();
 
         if (key.isReadable()) {
-            System.out.println("[DEBUG][Reactor] Processing read operation");
             Runnable task = handler.continueRead();
             if (task != null) {
-                System.out.println("[DEBUG][Reactor] Submitting read task to thread pool");
                 pool.submit(handler, task);
             }
         }
 
 	    if (key.isValid() && key.isWritable()) {
-            System.out.println("[DEBUG][Reactor] Processing write operation");
             handler.continueWrite();
         }
     }
@@ -171,7 +142,6 @@ public class Reactor<T> implements Server<T> {
             selectorTasks.remove().run();
         }
     }
-
 
     @Override
     public void close() throws IOException {

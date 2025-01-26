@@ -22,7 +22,7 @@ public abstract class BaseServer<T> implements Server<T> {
     private final ConnectionsImpl<T> connections;
 
 
-    //i added for the connrction id gennerator
+    //Added for the connrction id gennerator
     private static int connectionCounter = 0; 
 
     public BaseServer(

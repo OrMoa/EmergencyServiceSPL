@@ -18,16 +18,17 @@ private:
     
     // STOMP Protocol state
     std::atomic<bool> isLoggedIn{false};
-    int nextReceiptId{0};
-    int nextSubscriptionId{0};
+    std::atomic<int> nextMessageId{0};
+    std::atomic<int> nextReceiptId{0}; 
+    std::atomic<int> nextSubscriptionId{0};
     std::string currentUsername;
     
     // Thread-safe data structures
     std::mutex dataMutex;
-    std::map<std::string, int> channelToSubId;    // channel -> subId
-    std::map<int, std::string> subIdToChannel;    // subId -> channel
-    std::map<std::string, std::string> receiptIdToMsg;  // receiptId -> pending message
-    std::map<std::string, std::vector<Event>> userChannelEvents; // channel_user -> events
+    std::map<std::string, int> channelToSubId;    // channel to subId
+    std::map<int, std::string> subIdToChannel;    // subId to channel
+    std::map<std::string, std::string> receiptIdToMsg;  // receiptId to pending message
+    std::map<std::string, std::vector<Event>> userChannelEvents; // channel_user to events
     
     // Frame creation methods
     std::string createConnectFrame(const std::string& username, const std::string& password);
@@ -43,8 +44,7 @@ private:
     std::string formatDateTime(int epochTime) const;
     std::string formatEventMessage(const Event& event) const;
     bool parseHostPort(const std::string& hostPort, std::string& host, short& port);
-    std::string trim(const std::string& str);
-
+    std::string getErrorMessage(const std::vector<std::string>& lines) const;
 
 
 public:
@@ -56,7 +56,6 @@ public:
                 const std::string& username, const std::string& password);
     void disconnect();
     bool isConnected() const;
-    //bool shouldStop() const { return shouldTerminate; }
     
     // Main protocol operations
     std::vector<std::string> processInput(const std::string& input);

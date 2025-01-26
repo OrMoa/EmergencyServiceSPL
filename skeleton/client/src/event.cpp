@@ -68,8 +68,6 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
                 string trimmedKey = trim(key.substr(1));
                 string trimmedVal = trim(val);
                 general_information_from_string[trimmedKey] = trimmedVal; 
-                std::cout << "[DEBUG] Added general info - Key: '" << trimmedKey 
-                    << "', Value: '" << trimmedVal << "'" << std::endl;
             }
         }
     }

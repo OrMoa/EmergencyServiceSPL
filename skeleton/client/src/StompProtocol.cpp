@@ -71,9 +71,14 @@ vector<string> StompProtocol::processInput(const string& input) {
     if(parts.empty()) return frames;
     
     const string& command = parts[0];
-    std::cout << "[DEBUG] Processing command: " << command << std::endl;
 
     if(command == "login") {
+
+        if(isLoggedIn) {
+        cout << "The client is already logged in, log out before trying again" << endl;
+        return frames;
+        }
+
         if(parts.size() < 4) {
             std::cout << "Invalid login command. Usage: login {host:port} {username} {password}" << std::endl;
             return frames;
@@ -116,16 +121,16 @@ vector<string> StompProtocol::processInput(const string& input) {
 
     try {
         if(channelToSubId.count(channel) == 0) {
-            int subId = nextSubscriptionId++;
+            int subId = nextSubscriptionId.fetch_add(1);
             channelToSubId[channel] = subId;
             subIdToChannel[subId] = channel;
-            string receipt = std::to_string(nextReceiptId++);
+            string receipt = std::to_string(nextReceiptId.fetch_add(1));
             receiptIdToMsg[receipt] = "Joined channel " + channel;
             
             std::string subscribeFrame = createSubscribeFrame(channel);
             frames.push_back(subscribeFrame);
         } else {
-            std::cout << "[DEBUG] Already subscribed to channel: " << channel << std::endl;
+            std::cout << "Already subscribed to channel: " << channel << std::endl;
         }
     } catch (const std::exception& e) {
         std::cout << "Exception in join handler: " << e.what() << std::endl;
@@ -147,6 +152,8 @@ vector<string> StompProtocol::processInput(const string& input) {
             receiptIdToMsg[receipt] = "Exited channel " + channel;
             channelToSubId.erase(channel);
             subIdToChannel.erase(subId);
+        }else {
+            std::cout << "Not subscribed to channel: " << channel << std::endl;
         }
     }
     
@@ -197,8 +204,6 @@ vector<string> StompProtocol::processInput(const string& input) {
 void StompProtocol::processResponse(const string& response) {
     vector<string> lines = split(response, '\n');
     if(lines.empty()) return;
-
-    std::cout << "[DEBUG] Processing response. Command: " << lines[0] << std::endl;
     
     if(lines[0] == "CONNECTED") {
         std::lock_guard<std::mutex> lock(stateMutex);
@@ -206,7 +211,7 @@ void StompProtocol::processResponse(const string& response) {
         cout << "Login successful" << endl;
     }
     else if(lines[0] == "ERROR") {
-        cout << "Error: " << lines[lines.size()-1] << endl;
+        cout << "Error: " << getErrorMessage(lines) << endl;
         disconnect();
         return;
     }
@@ -261,18 +266,14 @@ void StompProtocol::processResponse(const string& response) {
                 if(!user.empty() && currentUsername != user) {
                     std::lock_guard<std::mutex> lock(dataMutex);
                     saveEventForUser(channel, user, event);
-                    std::cout << "[DEBUG] Saved event from user: " << user 
-                            << " in channel: " << channel << std::endl;
                 }
             }
             catch(const std::exception& e) {
-                std::cout << "[DEBUG] Error processing event: " << e.what() << std::endl;
+                std::cout << "Error processing event: " << e.what() << std::endl;
             }
         } 
     }
 }
-
-
 
 string StompProtocol::createConnectFrame(const string& username, const string& password) {
     std::stringstream frame;
@@ -338,7 +339,7 @@ string StompProtocol::createDisconnectFrame() {
     // Save the pending message for this receipt
     {
         std::lock_guard<std::mutex> lock(dataMutex);
-        receiptIdToMsg[receiptId] = "disconnect";  // Special message to trigger disconnect
+        receiptIdToMsg[receiptId] = "disconnect";  
     }
     
     frame << "DISCONNECT\n"
@@ -350,12 +351,10 @@ string StompProtocol::createDisconnectFrame() {
 bool StompProtocol::send(const string& frame) {
     
     if (!connectionHandler) {
-        std::cout << "[DEBUG] send failed: no connection handler" << std::endl;
         return false;
     }
     
     bool result = connectionHandler->sendFrameAscii(frame, '\0');
-    std::cout << "[DEBUG] send result: " << (result ? "success" : "failure") << std::endl;
     return result;
 }
 
@@ -388,7 +387,6 @@ string StompProtocol::getHeader(const string& header, const vector<string>& line
 
 void StompProtocol::saveEventForUser(const string& channel, const string& user, const Event& event) {
     string key = channel + "_" + user;
-    std::cout << "[DEBUG] key saved: " << key <<  std::endl;
     userChannelEvents[key].push_back(event);
 }
 
@@ -480,3 +478,21 @@ bool StompProtocol::parseHostPort(const std::string& hostPort, std::string& host
     }
 }
 
+string StompProtocol::getErrorMessage(const std::vector<string>& lines) const {
+    for (const string& line : lines) {
+        if (line.find("message:") == 0) {
+            return line.substr(8); // Skip "message:"
+        }
+    }
+    // If no message header found, join all lines after ERROR
+    string message;
+    bool first = true;
+    for (const string& line : lines) {
+        if (first) {
+            first = false;
+            continue;
+        }
+        message += line + "\n";
+    }
+    return message;
+}

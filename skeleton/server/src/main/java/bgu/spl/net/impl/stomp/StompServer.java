@@ -41,7 +41,6 @@ public class StompServer {
                 break;
 
             case "tpc":
-                System.out.println("[DEBUG] i'm in Thread-Per-Client server");
                 // Thread-Per-Client server
                 Server.<String>threadPerClient(
                         port,
