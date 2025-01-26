@@ -15,7 +15,6 @@ private:
     // Connection management
     std::shared_ptr<ConnectionHandler> connectionHandler;
     std::mutex stateMutex;
-    std::atomic<bool> shouldTerminate{false};
     
     // STOMP Protocol state
     std::atomic<bool> isLoggedIn{false};
@@ -57,7 +56,7 @@ public:
                 const std::string& username, const std::string& password);
     void disconnect();
     bool isConnected() const;
-    bool shouldStop() const { return shouldTerminate; }
+    //bool shouldStop() const { return shouldTerminate; }
     
     // Main protocol operations
     std::vector<std::string> processInput(const std::string& input);

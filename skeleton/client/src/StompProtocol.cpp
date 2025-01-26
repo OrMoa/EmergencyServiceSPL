@@ -16,7 +16,6 @@ using std::endl;
 StompProtocol::StompProtocol()
     : connectionHandler(nullptr),
       stateMutex(),
-      shouldTerminate(false),
       isLoggedIn(false),
       nextReceiptId(0),
       nextSubscriptionId(0),
@@ -58,12 +57,13 @@ bool StompProtocol::connect(const std::string& host, short port,
 }
 
 void StompProtocol::disconnect() {
-        channelToSubId.clear();
-        subIdToChannel.clear();
+    channelToSubId.clear();
+    subIdToChannel.clear();
+    if (connectionHandler) {
         connectionHandler->close();
         connectionHandler = nullptr;
-        isLoggedIn = false;
-        shouldTerminate = true;
+    }
+    isLoggedIn = false;
     }
 
 vector<string> StompProtocol::processInput(const string& input) {
@@ -111,12 +111,9 @@ vector<string> StompProtocol::processInput(const string& input) {
         return frames;
     }
 
-    std::cout << "[DEBUG] About to acquire lock" << std::endl;
     std::lock_guard<std::mutex> lock(dataMutex);
-    std::cout << "[DEBUG] Lock acquired" << std::endl;
     
     string channel = parts[1];
-    std::cout << "[DEBUG] Processing join command for channel: " << channel << std::endl;
 
     try {
         if(channelToSubId.count(channel) == 0) {
@@ -127,11 +124,9 @@ vector<string> StompProtocol::processInput(const string& input) {
             string receipt = std::to_string(nextReceiptId++);
             receiptIdToMsg[receipt] = "Joined channel " + channel;
             
-            std::cout << "[DEBUG] Creating subscribe frame..." << std::endl;
             std::string subscribeFrame = createSubscribeFrame(channel);
             std::cout << "[DEBUG] Created subscribe frame:\n" << subscribeFrame << std::endl;
             frames.push_back(subscribeFrame);
-            std::cout << "[DEBUG] Frame added to queue" << std::endl;
         } else {
             std::cout << "[DEBUG] Already subscribed to channel: " << channel << std::endl;
         }
@@ -173,7 +168,6 @@ vector<string> StompProtocol::processInput(const string& input) {
     
             for(const Event& event : eventsData.events) {
             std::string channel = event.get_channel_name();
-            std::cout << "[DEBUG] Creating send frame for channel: " << channel << std::endl;
             saveEventForUser(channel, currentUsername, event);
             std::string frame = createSendFrame(channel, formatEventMessage(event));
             std::cout << "[DEBUG] Created frame:\n" << frame << std::endl;
@@ -196,7 +190,6 @@ vector<string> StompProtocol::processInput(const string& input) {
         writeEventSummary(parts[1], parts[2], parts[3]);
     }
     else if(command == "logout") {
-        std::cout << "[DEBUG] Creating DISCONNECT frame" << std::endl;
         string frame = createDisconnectFrame();
         frames.push_back(frame);
         std::cout << "[DEBUG] Added DISCONNECT frame to frames vector" << std::endl;
@@ -222,7 +215,7 @@ void StompProtocol::processResponse(const string& response) {
     }
     else if(lines[0] == "ERROR") {
         cout << "Error: " << lines[lines.size()-1] << endl;
-        shouldTerminate = true; // Signal threads to stop
+        //shouldTerminate = true; // Signal threads to stop
         disconnect();
         return;
     }
@@ -373,7 +366,6 @@ string StompProtocol::createDisconnectFrame() {
 }
 
 bool StompProtocol::send(const string& frame) {
-    std::cout << "[DEBUG] StompProtocol::send called with frame:\n" << frame << std::endl;
     
     if (!connectionHandler) {
         std::cout << "[DEBUG] send failed: no connection handler" << std::endl;
@@ -429,24 +421,26 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
     std::vector<Event> events;
     string key = channel + "_" + user;
     std::cout << "[DEBUG] Generated key: " << key << std::endl;
-    
+    int activeEvents = 0;
+    int forcesArrived = 0;
    
     if(userChannelEvents.count(key) > 0) {
         events = userChannelEvents[key];
-        std::cout << "[DEBUG] Found " << events.size() << " events for key: " << key << std::endl;
-    } else {
-        std::cout << "[DEBUG] No events found for key: " << key << std::endl;
-        return;
-    }
+        std::sort(events.begin(), events.end(), 
+            [](const Event& a, const Event& b) {
+                if(a.get_date_time() != b.get_date_time())
+                    return a.get_date_time() < b.get_date_time();
+                return a.get_name() < b.get_name();
+            });
 
-    std::cout << "[DEBUG] Sorting events" << std::endl;
-    // Sort events first by time, then by name
-    std::sort(events.begin(), events.end(), 
-        [](const Event& a, const Event& b) {
-            if(a.get_date_time() != b.get_date_time())
-                return a.get_date_time() < b.get_date_time();
-            return a.get_name() < b.get_name();
-        });
+        for(const Event& event : events) {
+        const auto& info = event.get_general_information();
+        if(info.count("active") > 0 && info.at("active") == "true") 
+            activeEvents++;
+        if(info.count("forces_arrival_at_scene") > 0 && info.at("forces_arrival_at_scene") == "true")
+            forcesArrived++;
+        }
+    }
     
     std::ofstream file(filename, std::ios::trunc);
     if(!file.is_open()) {
@@ -454,52 +448,32 @@ void StompProtocol::writeEventSummary(const string& channel, const string& user,
         return;
     }
 
-    std::cout << "[DEBUG] Opened file for writing: " << filename << std::endl;
-
     file << "Channel " << channel << endl;
-
+    file << "Stats:" << endl;
     // Count statistics
     int totalEvents = events.size();
-    int activeEvents = 0;
-    int forcesArrived = 0;
-    
-    for(const Event& event : events) {
-        const auto& info = event.get_general_information();
-        if(info.count("active") > 0 && info.at("active") == "true") 
-            activeEvents++;
-        if(info.count("forces_arrival_at_scene") > 0 && info.at("forces_arrival_at_scene") == "true")
-            forcesArrived++;
-    }
-
-    std::cout << "[DEBUG] Statistics - Total: " << totalEvents 
-              << ", Active: " << activeEvents 
-              << ", Forces Arrived: " << forcesArrived << std::endl;
-    
-    // Write header and stats
-    file << "Stats:" << endl;
     file << "Total: " << totalEvents << endl;
     file << "active: " << activeEvents << endl;
     file << "forces arrival at scene: " << forcesArrived << endl << endl;
     
-    std::cout << "[DEBUG] Writing event reports" << std::endl;
   
     // Write event reports
-    file << "Event Reports:" << endl;
-    for(size_t i = 0; i < events.size(); i++) {
-        const Event& event = events[i];
-        file << "Report_" << (i+1) << ":" << endl;
-        file << "city: " << event.get_city() << endl;
-        file << "date time: " << formatDateTime(event.get_date_time()) << endl;
-        file << "event name: " << event.get_name() << endl;
-        
-        // Truncate description if needed
-        string desc = event.get_description();
-        if(desc.length() > 27) {
-            desc = desc.substr(0, 27) + "...";
+    if(!events.empty()) {
+        file << "Event Reports:" << endl;
+        for(size_t i = 0; i < events.size(); i++) {
+            const Event& event = events[i];
+            file << "Report_" << (i+1) << ":" << endl;
+            file << "city: " << event.get_city() << endl;
+            file << "date time: " << formatDateTime(event.get_date_time()) << endl;
+            file << "event name: " << event.get_name() << endl;
+            
+            string desc = event.get_description();
+            if(desc.length() > 27) {
+                desc = desc.substr(0, 27) + "...";
+            }
+            file << "summary: " << desc << endl << endl;
         }
-        file << "summary: " << desc << endl << endl;
     }
-    std::cout << "[DEBUG] Finished writing event reports" << std::endl;
 
     file.close();
     std::cout << "[DEBUG] File closed successfully" << std::endl;

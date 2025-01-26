@@ -4,13 +4,11 @@
 
 KeyboardInput::KeyboardInput(StompProtocol& protocol)
     : protocol(protocol), inputThread(), shouldStop(false) {
-        std::cout << "[DEBUG] KeyboardInput initialized." << std::endl;
 
     }
 
 
 void KeyboardInput::run() {
-    std::cout << "[DEBUG] KeyboardInput::run started." << std::endl;
 
     while(!shouldStop) {
         // Read a line from stdin
@@ -39,7 +37,6 @@ void KeyboardInput::run() {
             }
         }
     }
-    std::cout << "[DEBUG] KeyboardInput::run ended" << std::endl;
 }
 
 void KeyboardInput::start() {
@@ -47,10 +44,7 @@ void KeyboardInput::start() {
 }
 
 void KeyboardInput::stop() {
-    // Set the stop flag
     shouldStop = true;
-    std::cout << "[DEBUG] shouldStop set to true in stop (keyboardInput)." << std::endl;
-    // Force cin to unblock by closing stdin
     pthread_kill(inputThread.native_handle(), SIGINT);
     
     // Wait for the thread to finish

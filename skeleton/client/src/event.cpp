@@ -38,11 +38,9 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
             string val;
             if(lineArgs.size() == 2) {
                 val = lineArgs.at(1);
-                std::cout << "[DEBUG] Parsed key: '" << key << "', value: '" << val << "'" << std::endl;
             }
             if(key == "user") {
                 eventOwnerUser = trim(val);
-                std::cout << "[DEBUG] Set eventOwnerUser: " << val << std::endl;
             }
             if(key == "channel name") {
                 channel_name = trim(val);
@@ -50,23 +48,18 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
             }
             if(key == "city") {
                 city = trim(val);
-                std::cout << "[DEBUG] Set city: " << val << std::endl;
             }
             else if(key == "event name") {
                 name = trim(val);
-                std::cout << "[DEBUG] Set event name: " << val << std::endl;
             }
             else if(key == "date time") {
                 date_time = std::stoi(val);
-                std::cout << "[DEBUG] Set date_time: " << date_time << std::endl;
             }
             else if(key == "general information") {
                 inGeneralInformation = true;
-                std::cout << "[DEBUG] Entering general information section" << std::endl;
                 continue;
             }
             else if(key == "description") {
-                std::cout << "[DEBUG] Reading description" << std::endl;
                 while(getline(ss,line,'\n')) {
                     eventDescription += line + "\n";
                 }
@@ -84,7 +77,6 @@ Event::Event(const std::string &frame_body): channel_name(""), city(""),
         }
     }
     general_information = general_information_from_string;
-    std::cout << "[DEBUG] Finished parsing frame body" << std::endl;
 }
 
 Event::~Event()

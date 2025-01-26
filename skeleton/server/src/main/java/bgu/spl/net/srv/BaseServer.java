@@ -19,6 +19,8 @@ public abstract class BaseServer<T> implements Server<T> {
     private final Supplier<MessagingProtocol<T>> protocolFactory;
     private final Supplier<MessageEncoderDecoder<T>> encdecFactory;
     private ServerSocket sock;
+    private final ConnectionsImpl<T> connections;
+
 
     //i added for the connrction id gennerator
     private static int connectionCounter = 0; 
@@ -32,6 +34,8 @@ public abstract class BaseServer<T> implements Server<T> {
         this.protocolFactory = protocolFactory;
         this.encdecFactory = encdecFactory;
 		this.sock = null;
+        this.connections = new ConnectionsImpl<>();
+
     }
 
     @Override
@@ -42,8 +46,6 @@ public abstract class BaseServer<T> implements Server<T> {
 			System.out.println("Server started");
 
             this.sock = serverSock; //just to be able to close
-
-            Connections<T> connections = new ConnectionsImpl<>(); 
 
             while (!Thread.currentThread().isInterrupted()) {
 
@@ -68,8 +70,8 @@ public abstract class BaseServer<T> implements Server<T> {
     }
 
     public static synchronized int generateConnectionId() {
-        connectionCounter++; // מגדיל את המונה עבור כל חיבור חדש
-        return connectionCounter; // מחזיר את המזהה הייחודי
+        connectionCounter++; 
+        return connectionCounter; 
     }
 
     @Override

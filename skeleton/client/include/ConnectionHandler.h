@@ -13,7 +13,6 @@ private:
 	boost::asio::io_service io_service_;   // Provides core I/O functionality
 	tcp::socket socket_;
 	bool connected;
-	std::mutex mutex_; // Add mutex for thread safety
 	static const char STOMP_DELIMITER = '\0';
 
 public:

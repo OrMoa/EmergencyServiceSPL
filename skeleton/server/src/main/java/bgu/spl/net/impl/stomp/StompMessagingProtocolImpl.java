@@ -5,7 +5,14 @@ import bgu.spl.net.impl.rci.Command;
 import bgu.spl.net.srv.Connections;
 import bgu.spl.net.srv.ConnectionsImpl;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+
 
 public class StompMessagingProtocolImpl implements StompMessagingProtocol<String> {
  //fileds
@@ -40,19 +47,19 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      switch (command) {
          case "CONNECT":
              return processConnect(lines);
-             /*break;
+             
          case "SEND":
-             processSend(lines);
-             break;*/
+             return processSend(lines);
+             
          case "SUBSCRIBE":
              return processSubscribe(lines);
-             /*break;
+             
          case "UNSUBSCRIBE":
-             processUnsubscribe(lines);
-             break;
+             return processUnsubscribe(lines);
+             
          case "DISCONNECT":
              processDisconnect(lines);
-             break; */
+             break;
          default:
              handleError("Unknown command: " + command, null);
              break;
@@ -95,7 +102,6 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      }
      activeConnections.put(username, connectionId);
 
-     // יצירת המיתוג עם הגרסה
     StringBuilder builder = new StringBuilder();
     builder.append("CONNECTED");
     builder.append("\n");
@@ -107,47 +113,8 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     String connectedFrame = builder.toString();
     
     connections.send(connectionId, connectedFrame);
-    return connectedFrame;
+    return null;
     }
-
- private void processSend(String[] lines) {
-
-     String destination = null;
-     String user = null;
-     StringBuilder body = new StringBuilder();
-     boolean isBody = false;
-
-     for (String line : lines) {
-         if (line.startsWith("destination:")) {
-             destination = line.substring(12);
-         } else if (line.startsWith("user:")) {
-             user = line.substring(5);
-         } else if (line.isEmpty()) {
-             isBody = true; 
-         } else if (isBody) {
-             body.append(line).append("\n");
-         }
-     }
-
-     if (destination == null) {
-         handleError("Missing destination header", null);
-         return;
-     }
-
-     if (!subscriptions.containsKey(destination)) {
-         handleError("No subscribers for destination: " + destination, null);
-         return;
-     }
-
-     String messageFrame = String.format(
-         "MESSAGE\ndestination:%s\n\n%s\u0000",
-         destination,
-         body.toString()
-     );
-     
-     connections.send(destination, messageFrame);
-
- }
 
  private String processSubscribe(String[] lines) {
      String destination = null;
@@ -155,27 +122,166 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
      String receiptId = null;
 
      for (String line : lines) {
-         if (line.startsWith("destination:")) {
-         destination = line.substring(12);
-     } else if (line.startsWith("id:")) {
-         subscriptionId = line.substring(3); 
-     } else if (line.startsWith("receipt:")) {
-         receiptId = line.substring(8); 
-     }
-     }
+        if (line.startsWith("destination:")) {
+            destination = line.substring(12);
 
-     if (destination == null || receiptId == null) {
-         handleError("[DEBUG] Missing destination or id header", receiptId);
+            if (destination.startsWith("/")) {
+                destination = destination.substring(1);
+             }
+             if (destination.endsWith("/")) {
+                destination = destination.substring(0, destination.length() - 1); 
+             }
+        } else if (line.startsWith("id:")) {
+            subscriptionId = line.substring(3).trim(); 
+        } else if (line.startsWith("receipt:")) {
+            receiptId = line.substring(8).trim(); 
+        }
+    }
+
+    System.out.println("[DEBUG] Subscribe - destination: " + destination + ", id: " + subscriptionId);
+
+     if (destination == null || subscriptionId == null || receiptId == null) {
+         handleError("[DEBUG] Missing destination or id header or recipt id ", receiptId);
          return null;
      }
 
-     subscriptions.putIfAbsent(destination, new ConcurrentHashMap<>());
-     subscriptions.get(destination).put(connectionId, subscriptionId);
+     connections.subscribe(destination, connectionId, subscriptionId);
 
-     sendReceipt(connectionId, receiptId);
+
+     //subscriptions.putIfAbsent(destination, new ConcurrentHashMap<>());
+     //subscriptions.get(destination).put(connectionId, subscriptionId);
+
+     System.out.println("[DEBUG] After adding subscriber:");
+     System.out.println("[DEBUG] Subscriptions map: " + subscriptions);
+     System.out.println("[DEBUG] Active connections map: " + activeConnections);
+
+    
+     /*StringBuilder builder = new StringBuilder();
+     builder.append("RECEIPT");
+     builder.append("\n");
+     builder.append("receipt-id:");
+     builder.append(receiptId);
+     builder.append("\n");
+     builder.append("\n");*/
+
+     StringBuilder builder = new StringBuilder();
+     builder.append("RECEIPT\n");
+     builder.append("receipt-id:").append(receiptId).append("\n\n");
 
      System.out.println("Joined channel " + destination);
+     String receipt = builder.toString();
+     connections.send(connectionId, receipt);
     
+     return receipt;
+
+ }
+
+
+private String processSend(String[] lines) {
+    String destination = null;
+    
+    // Extract destination
+    for (String line : lines) {
+        if (line.startsWith("destination:/")) {
+            destination = line.substring(12);
+            if (destination.startsWith("/")) {
+                destination = destination.substring(1);
+             }
+             if (destination.endsWith("/")) {
+                destination = destination.substring(0, destination.length() - 1); 
+             }
+            break;
+        }
+    }
+
+    if (destination == null) {
+        handleError("Missing destination header", null);
+        return null;
+    }
+
+    // Check subscription
+    if (!((ConnectionsImpl<String>)connections).isUserSubscribedToTopic(connectionId, destination)) {
+        handleError("Not subscribed to topic: " + destination, null);
+        return null;
+    }
+
+    // Convert to MESSAGE frame
+    String messageFrame = "MESSAGE\n" + String.join("\n", lines).replace("SEND\n", "");
+    connections.send(destination, messageFrame);
+    return null;
+}
+  
+/*private String processUnsubscribe(String[] lines) {
+    String subscriptionId = null;
+    String receiptId = null;
+
+    for (String line : lines) {
+        if (line.startsWith("id:")) {
+            subscriptionId = line.substring(3);
+        } else if (line.startsWith("receipt:")) {
+         receiptId = line.substring(8);
+        }
+    }
+
+     boolean removed = false;
+
+     for (String destination : subscriptions.keySet()) {
+        ConcurrentHashMap<Integer, String> subscribers = subscriptions.get(destination);
+
+        if (subscribers.containsKey(connectionId) && subscribers.get(connectionId).equals(subscriptionId)) {
+            subscribers.remove(connectionId);
+            removed = true;
+            System.out.println("Exited channel " + destination);
+            break;
+        }
+
+        if (!removed) {
+            handleError("Subscription ID not found: " + subscriptionId, receiptId);
+            return null;
+        }
+     }
+
+    StringBuilder builder = new StringBuilder();
+        builder.append("RECEIPT");
+        builder.append("\n");
+        builder.append("receipt-id:");
+        builder.append(receiptId);
+        builder.append("\n");
+        builder.append("\n");
+
+    String connectedFrame = builder.toString();
+    connections.send(connectionId, connectedFrame);
+
+    return connectedFrame;
+
+ }*/
+
+ private String processUnsubscribe(String[] lines) {
+    String subscriptionId = null;
+    String receiptId = null;
+
+    // שליפת subscriptionId ו־receiptId מתוך השורות
+    for (String line : lines) {
+        if (line.startsWith("id:")) {
+            subscriptionId = line.substring(3).trim();
+        } else if (line.startsWith("receipt:")) {
+            receiptId = line.substring(8).trim();
+        }
+    }
+
+    if (subscriptionId == null || receiptId == null) {
+        handleError("Missing subscription ID or receipt header", receiptId);
+        return null;
+    }
+
+    // הסרת המנוי באמצעות connections.unsubscribe
+    boolean unsubscribed = ((ConnectionsImpl<String>) connections).unsubscribe(subscriptionId, connectionId);
+
+    if (!unsubscribed) {
+        handleError("Subscription ID not found: " + subscriptionId, receiptId);
+        return null;
+    }
+
     StringBuilder builder = new StringBuilder();
     builder.append("RECEIPT");
     builder.append("\n");
@@ -184,68 +290,15 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
     builder.append("\n");
     builder.append("\n");
 
-    String connectedFrame = builder.toString();
-     return connectedFrame;
+    String receiptFrame = builder.toString();
 
- }
- private void sendReceipt(int connectionId, String receiptId) {
-     if (receiptId != null && !receiptId.isEmpty()) {
-         String receiptFrame = String.format("RECEIPT\nreceipt-id:%s\n\n\u0000", receiptId);
-         connections.send(connectionId, receiptFrame);
-     }
- }   
- private void processUnsubscribe(String[] lines) {
-     String subscriptionId = null;
-     String receiptId = null;
+    connections.send(connectionId, receiptFrame);
 
-     for (String line : lines) {
-     if (line.startsWith("id:")) {
-         subscriptionId = line.substring(3);
-     } else if (line.startsWith("receipt:")) {
-         receiptId = line.substring(8);}
-     }
+    return receiptFrame;
+}
 
-     if (subscriptionId == null) {
-     handleError("Missing subscription id header", receiptId);
-     return;
-     }
 
-     boolean removed = false;
-
-     for (String destination : subscriptions.keySet()) {
-     ConcurrentHashMap<Integer, String> subscribers = subscriptions.get(destination);
-
-     if (subscribers.containsKey(connectionId) && subscribers.get(connectionId).equals(subscriptionId)) {
-         subscribers.remove(connectionId);
-         removed = true;
-         System.out.println("Exited channel " + destination);
-         break;
-     }
-
-     if (!removed) {
-     handleError("Subscription ID not found: " + subscriptionId, receiptId);
-     return;
-     }
-
-     sendReceipt(connectionId, receiptId);}
- }
- private void processDisconnect(String[] lines) {
-     String receiptId = null;
-
-     for (String line : lines) {
-     if (line.startsWith("receipt:")) {
-         receiptId = line.substring(8);}
-     }
-     if (receiptId == null || receiptId.isEmpty()) {
-     handleError("Missing receipt header in DISCONNECT frame", receiptId);
-     return;}
-
-     subscriptions.forEach((destination, subscribers) -> subscribers.remove(connectionId));
-     sendReceipt(connectionId, receiptId);
-     shouldTerminate = true;
-     System.out.println("Client with connectionId " + connectionId + " has disconnected.");
- }
- private void handleError(String errorMessage, String receiptId) {
+private void handleError(String errorMessage, String receiptId) {
 
      StringBuilder errorFrame = new StringBuilder();
 
@@ -255,12 +308,33 @@ public class StompMessagingProtocolImpl implements StompMessagingProtocol<String
 
      if (receiptId != null && !receiptId.isEmpty()) {
      errorFrame.append("receipt-id:").append(receiptId).append("\n");
-     }
+    }
 
      errorFrame.append("\n\u0000");
      connections.send(connectionId, errorFrame.toString());
      shouldTerminate = true;
-
  }  
 
+ private void processDisconnect(String[] lines) {
+    String receiptId = null;
+    for (String line : lines) {
+        if (line.startsWith("receipt:")) {
+            receiptId = line.substring(8).trim();
+            break;
+        }
+    }
+
+    if (receiptId == null) {
+        handleError("Missing receipt header", null);
+    }
+
+    // Send receipt before disconnecting
+    String receipt = String.format("RECEIPT\nreceipt-id:%s\n\n", receiptId);
+    connections.send(connectionId, receipt);
+    
+    // Disconnect client
+    connections.disconnect(connectionId);
+    shouldTerminate = true;
+    
+}
 }
